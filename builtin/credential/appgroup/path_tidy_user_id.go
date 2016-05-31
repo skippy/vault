@@ -59,7 +59,7 @@ func (b *backend) tidyUserID(s logical.Storage) error {
 		}
 
 		// Unset ExpirationTime indicates non-expiring UserIDs
-		if result.ExpirationTime != time.Duration(0) && time.Now().UTC().After(result.ExpirationTime) {
+		if !result.ExpirationTime.IsZero() && time.Now().UTC().After(result.ExpirationTime) {
 			if err := s.Delete("userid/" + userID); err != nil {
 				return fmt.Errorf("error deleting user ID %s from storage: %s", userID, err)
 			}

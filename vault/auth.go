@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/hashicorp/go-uuid"
@@ -213,7 +212,6 @@ func (c *Core) loadCredentials() error {
 		c.auth = authTable
 	}
 
-	log.Printf("c.auth: %#v\n", c.auth)
 	// Done if we have restored the auth table
 	if c.auth != nil {
 		needPersist := false
@@ -226,7 +224,6 @@ func (c *Core) loadCredentials() error {
 
 		// Upgrade to table-scoped entries
 		for _, entry := range c.auth.Entries {
-			log.Printf("entry: %#v\n", entry)
 			if entry.Table == "" {
 				entry.Table = c.auth.Type
 				needPersist = true
