@@ -343,9 +343,11 @@ func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorV
 	// If UserIDTTL is not specified or if it crosses the backend mount's limit,
 	// cap the expiration to backend's max. Otherwise, use it to determine the
 	// expiration time.
-	if userIDEntry.UserIDTTL <= time.Duration(0) || userIDEntry.UserIDTTL > b.System().MaxLeaseTTL() {
+	if userIDEntry.UserIDTTL < time.Duration(0) || userIDEntry.UserIDTTL > b.System().MaxLeaseTTL() {
 		userIDEntry.ExpirationTime = currentTime.Add(b.System().MaxLeaseTTL())
-	} else {
+	} else if userIDEntry.UserIDTTL != time.Duration(0) {
+		// Set the ExpirationTime only if UserIDTTL was set. UserIDs should not
+		// expire by default.
 		userIDEntry.ExpirationTime = currentTime.Add(userIDEntry.UserIDTTL)
 	}
 
