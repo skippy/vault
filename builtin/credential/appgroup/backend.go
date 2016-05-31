@@ -23,8 +23,8 @@ type backend struct {
 	// Lock to make changes to registered Groups
 	groupLock *sync.RWMutex
 
-	// Lock to make changes to "generic" mode storage entries
-	genericLock *sync.RWMutex
+	// Lock to make changes to "supergroup" mode storage entries
+	superGroupLock *sync.RWMutex
 
 	// Map of locks to make changes to the UserIDs created.
 	// The lock in the map will be keyed off of UserID itself.
@@ -62,8 +62,8 @@ func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
 		// Create the lock for making changes to the Groups registered with the backend
 		groupLock: &sync.RWMutex{},
 
-		// Create the lock for making changes to the storage entries of "generic" mode
-		genericLock: &sync.RWMutex{},
+		// Create the lock for making changes to the storage entries of "supergroup" mode
+		superGroupLock: &sync.RWMutex{},
 
 		// Create the map of locks to hold locks that are used to modify the created
 		// UserIDs.
@@ -90,7 +90,7 @@ func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
 		Paths: framework.PathAppend(
 			appPaths(b),
 			groupPaths(b),
-			genericPaths(b),
+			superGroupPaths(b),
 			[]*framework.Path{
 				pathLogin(b),
 				pathTidyUserID(b),

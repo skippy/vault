@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	selectorTypeApp     = "app"
-	selectorTypeGroup   = "group"
-	selectorTypeGeneric = "generic"
+	selectorTypeApp        = "app"
+	selectorTypeGroup      = "group"
+	selectorTypeSuperGroup = "supergroup"
 )
 
 // userIDStorageEntry represents the information stored in storage when a UserID is created.
@@ -65,8 +65,8 @@ func (b *backend) validateCredentials(s logical.Storage, selector, userID string
 	selectorType := ""
 	selectorValue := ""
 	switch {
-	case selector == "generic":
-		selectorType = "generic"
+	case selector == selectorTypeSuperGroup:
+		selectorType = selectorTypeSuperGroup
 		selectorValue = b.salt.SaltID(userID)
 	case strings.HasPrefix(selector, "app/") || strings.HasPrefix(selector, "group/"):
 		selectorFields := strings.SplitN(selector, "/", 2)
@@ -141,15 +141,15 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 
 		resp.TokenTTL = group.TokenTTL
 		resp.TokenMaxTTL = group.TokenMaxTTL
-	case selectorTypeGeneric:
-		generic, err := b.genericEntry(s, selectorValue)
+	case selectorTypeSuperGroup:
+		superGroup, err := b.superGroupEntry(s, selectorValue)
 		if err != nil {
 			return nil, err
 		}
-		if generic == nil {
-			return nil, fmt.Errorf("generic credential referred by the user ID does not exist")
+		if superGroup == nil {
+			return nil, fmt.Errorf("supergroup credential referred by the user ID does not exist")
 		}
-		for _, groupName := range generic.Groups {
+		for _, groupName := range superGroup.Groups {
 			group, err := b.groupEntry(s, groupName)
 			if err != nil {
 				return nil, err
@@ -164,7 +164,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 			resp.Policies = append(resp.Policies, group.AdditionalPolicies...)
 		}
 
-		for _, appName := range generic.Apps {
+		for _, appName := range superGroup.Apps {
 			app, err := b.appEntry(s, appName)
 			if err != nil {
 				return nil, err
@@ -173,11 +173,11 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 			resp.Policies = append(resp.Policies, app.Policies...)
 		}
 
-		// Append the additonal policies set on the generic entry
-		resp.Policies = append(resp.Policies, generic.AdditionalPolicies...)
+		// Append the additonal policies set on the supergroup entry
+		resp.Policies = append(resp.Policies, superGroup.AdditionalPolicies...)
 
-		resp.TokenTTL = generic.TokenTTL
-		resp.TokenMaxTTL = generic.TokenMaxTTL
+		resp.TokenTTL = superGroup.TokenTTL
+		resp.TokenMaxTTL = superGroup.TokenMaxTTL
 	default:
 		return nil, fmt.Errorf("unknown selector type")
 	}
@@ -255,12 +255,12 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 		if err := s.Delete(entryIndex); err != nil {
 			return false, err
 		}
-		// The storage entry for generic type is not created by any endpoints
+		// The storage entry for superGroup type is not created by any endpoints
 		// and it is not cleaned up in any other way. When the UserID belonging
-		// to the generic storage entry is getting invalidated, the entry should
+		// to the superGroup storage entry is getting invalidated, the entry should
 		// be deleted as well.
-		if selectorType == selectorTypeGeneric {
-			if err := b.deleteGenericEntry(s, selectorValue); err != nil {
+		if selectorType == selectorTypeSuperGroup {
+			if err := b.deleteSuperGroupEntry(s, selectorValue); err != nil {
 				return false, err
 			}
 		}

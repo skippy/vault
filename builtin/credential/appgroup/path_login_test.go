@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/vault/logical"
 )
 
-func TestBackend_generic_login(t *testing.T) {
+func TestBackend_supergroup_login(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
@@ -22,7 +22,7 @@ func TestBackend_generic_login(t *testing.T) {
 	createGroup(t, b, storage, "group2", "app5,app6", "o,p")
 	createGroup(t, b, storage, "group3", "app3,app4,app5,app6", "q,r")
 
-	genericCredsData := map[string]interface{}{
+	superGroupCredsData := map[string]interface{}{
 		"groups":              "group1,group2,group3",
 		"apps":                "app1,app2",
 		"additional_policies": "s,t",
@@ -32,18 +32,18 @@ func TestBackend_generic_login(t *testing.T) {
 		"token_max_ttl":       502,
 	}
 
-	genericCredsReq := &logical.Request{
+	superGroupCredsReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "generic/creds",
+		Path:      "supergroup/creds",
 		Storage:   storage,
-		Data:      genericCredsData,
+		Data:      superGroupCredsData,
 	}
 
-	resp, err = b.HandleRequest(genericCredsReq)
+	resp, err = b.HandleRequest(superGroupCredsReq)
 	failOnError(t, resp, err)
 
 	loginData := map[string]interface{}{
-		"selector": "generic",
+		"selector": selectorTypeSuperGroup,
 		"user_id":  resp.Data["user_id"],
 	}
 	loginReq := &logical.Request{

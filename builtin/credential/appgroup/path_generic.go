@@ -12,9 +12,9 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-// genericStorageEntry stores all the options that are set during UserID
-// creation in "generic" mode.
-type genericStorageEntry struct {
+// superGroupStorageEntry stores all the options that are set during UserID
+// creation in "supergroup" mode.
+type superGroupStorageEntry struct {
 	// All the Groups that are to be accessible by the UserID created
 	Groups []string `json:"groups" structs:"groups" mapstructure:"groups"`
 
@@ -35,19 +35,19 @@ type genericStorageEntry struct {
 
 	// Along with the combined set of Apps' and Groups' policies, the policies in this
 	// list will be added to capabilities of the token issued, when a UserID generated
-	// in generic mode is used perform the login.
+	// in superGroup mode is used perform the login.
 	AdditionalPolicies []string `json:"additional_policies" structs:"additional_policies" mapstructure:"additional_policies"`
 }
 
-// genericPaths creates the paths that are used to create UserIDs in generic mode
+// superGroupPaths creates the paths that are used to create UserIDs in superGroup mode
 //
 // Paths returned:
-// generic/creds
-// generic/creds-specific
-func genericPaths(b *backend) []*framework.Path {
+// supergroup/creds
+// supergroup/creds-specific
+func superGroupPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
-			Pattern: "generic/creds$",
+			Pattern: "supergroup/creds$",
 			Fields: map[string]*framework.FieldSchema{
 				"groups": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -86,13 +86,13 @@ addition to those, a set of policies can be assigned using this.
 			},
 
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathGenericCredsUpdate,
+				logical.UpdateOperation: b.pathSuperGroupCredsUpdate,
 			},
-			HelpSynopsis:    pathGenericCredsHelpSys,
-			HelpDescription: pathGenericCredsHelpDesc,
+			HelpSynopsis:    pathSuperGroupCredsHelpSys,
+			HelpDescription: pathSuperGroupCredsHelpDesc,
 		},
 		&framework.Path{
-			Pattern: "generic/creds-specific$",
+			Pattern: "supergroup/creds-specific$",
 			Fields: map[string]*framework.FieldSchema{
 				"user_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -131,45 +131,45 @@ addition to those, a set of policies can be assigned using this.
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathGenericCredsSpecificUpdate,
+				logical.UpdateOperation: b.pathSuperGroupCredsSpecificUpdate,
 			},
-			HelpSynopsis:    pathGenericCredsSpecificHelpSys,
-			HelpDescription: pathGenericCredsSpecificHelpDesc,
+			HelpSynopsis:    pathSuperGroupCredsSpecificHelpSys,
+			HelpDescription: pathSuperGroupCredsSpecificHelpDesc,
 		},
 	}
 }
 
-func (b *backend) setGenericEntry(s logical.Storage, genericName string, generic *genericStorageEntry) error {
-	b.genericLock.Lock()
-	defer b.genericLock.Unlock()
-	if entry, err := logical.StorageEntryJSON("generic/"+strings.ToLower(genericName), generic); err != nil {
+func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, superGroup *superGroupStorageEntry) error {
+	b.superGroupLock.Lock()
+	defer b.superGroupLock.Unlock()
+	if entry, err := logical.StorageEntryJSON("supergroup/"+strings.ToLower(superGroupName), superGroup); err != nil {
 		return err
 	} else {
 		return s.Put(entry)
 	}
 }
 
-func (b *backend) deleteGenericEntry(s logical.Storage, genericName string) error {
-	if genericName == "" {
-		return fmt.Errorf("missing generic_name")
+func (b *backend) deleteSuperGroupEntry(s logical.Storage, superGroupName string) error {
+	if superGroupName == "" {
+		return fmt.Errorf("missing superGroupName")
 	}
-	b.genericLock.Lock()
-	defer b.genericLock.Unlock()
+	b.superGroupLock.Lock()
+	defer b.superGroupLock.Unlock()
 
-	return s.Delete("generic/" + strings.ToLower(genericName))
+	return s.Delete("supergroup/" + strings.ToLower(superGroupName))
 }
 
-func (b *backend) genericEntry(s logical.Storage, genericName string) (*genericStorageEntry, error) {
-	if genericName == "" {
-		return nil, fmt.Errorf("missing generic_name")
+func (b *backend) superGroupEntry(s logical.Storage, superGroupName string) (*superGroupStorageEntry, error) {
+	if superGroupName == "" {
+		return nil, fmt.Errorf("missing superGroupName")
 	}
 
-	var result genericStorageEntry
+	var result superGroupStorageEntry
 
-	b.genericLock.RLock()
-	defer b.genericLock.RUnlock()
+	b.superGroupLock.RLock()
+	defer b.superGroupLock.RUnlock()
 
-	if entry, err := s.Get("generic/" + strings.ToLower(genericName)); err != nil {
+	if entry, err := s.Get("supergroup/" + strings.ToLower(superGroupName)); err != nil {
 		return nil, err
 	} else if entry == nil {
 		return nil, nil
@@ -180,20 +180,20 @@ func (b *backend) genericEntry(s logical.Storage, genericName string) (*genericS
 	return &result, nil
 }
 
-func (b *backend) pathGenericCredsUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathSuperGroupCredsUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	userID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate UserID:%s", err)
 	}
-	return b.handleGenericCredsCommon(req, data, userID)
+	return b.handleSuperGroupCredsCommon(req, data, userID)
 }
 
-func (b *backend) pathGenericCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleGenericCredsCommon(req, data, data.Get("user_id").(string))
+func (b *backend) pathSuperGroupCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	return b.handleSuperGroupCredsCommon(req, data, data.Get("user_id").(string))
 }
 
-func (b *backend) handleGenericCredsCommon(req *logical.Request, data *framework.FieldData, userID string) (*logical.Response, error) {
-	generic := &genericStorageEntry{
+func (b *backend) handleSuperGroupCredsCommon(req *logical.Request, data *framework.FieldData, userID string) (*logical.Response, error) {
+	superGroup := &superGroupStorageEntry{
 		Groups:             strutil.ParseStrings(data.Get("groups").(string)),
 		Apps:               strutil.ParseStrings(data.Get("apps").(string)),
 		AdditionalPolicies: policyutil.ParsePolicies(data.Get("additional_policies").(string)),
@@ -203,15 +203,15 @@ func (b *backend) handleGenericCredsCommon(req *logical.Request, data *framework
 		TokenMaxTTL:        time.Second * time.Duration(data.Get("token_max_ttl").(int)),
 	}
 
-	if len(generic.Groups) == 0 && len(generic.Apps) == 0 {
+	if len(superGroup.Groups) == 0 && len(superGroup.Apps) == 0 {
 		return logical.ErrorResponse("missing groups and/or apps"), nil
 	}
 
-	if generic.NumUses < 0 {
+	if superGroup.NumUses < 0 {
 		return logical.ErrorResponse("num_uses cannot be negative"), nil
 	}
 
-	if generic.TokenMaxTTL > time.Duration(0) && generic.TokenTTL > generic.TokenMaxTTL {
+	if superGroup.TokenMaxTTL > time.Duration(0) && superGroup.TokenTTL > superGroup.TokenMaxTTL {
 		return logical.ErrorResponse("token_ttl should not be greater than token_max_ttl"), nil
 	}
 
@@ -219,16 +219,16 @@ func (b *backend) handleGenericCredsCommon(req *logical.Request, data *framework
 		return logical.ErrorResponse("missing user_id"), nil
 	}
 
-	genericName := b.salt.SaltID(userID)
+	superGroupName := b.salt.SaltID(userID)
 
 	// Store the entry.
-	if err := b.setGenericEntry(req.Storage, genericName, generic); err != nil {
+	if err := b.setSuperGroupEntry(req.Storage, superGroupName, superGroup); err != nil {
 		return nil, err
 	}
 
-	if err := b.registerUserIDEntry(req.Storage, selectorTypeGeneric, genericName, userID, &userIDStorageEntry{
-		NumUses:   generic.NumUses,
-		UserIDTTL: generic.UserIDTTL,
+	if err := b.registerUserIDEntry(req.Storage, selectorTypeSuperGroup, superGroupName, userID, &userIDStorageEntry{
+		NumUses:   superGroup.NumUses,
+		UserIDTTL: superGroup.UserIDTTL,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to store user ID: %s", err)
 	}
@@ -236,15 +236,15 @@ func (b *backend) handleGenericCredsCommon(req *logical.Request, data *framework
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"user_id":  userID,
-			"selector": "generic",
+			"selector": selectorTypeSuperGroup,
 		},
 	}, nil
 }
 
-const pathGenericCredsSpecificHelpSys = `Assign a UserID of choice against any combination of
+const pathSuperGroupCredsSpecificHelpSys = `Assign a UserID of choice against any combination of
 registered App(s) and/or Group(s), with custom options.`
 
-const pathGenericCredsSpecificHelpDesc = `This option is not recommended unless there is a specific
+const pathSuperGroupCredsSpecificHelpDesc = `This option is not recommended unless there is a specific
 need to do so. This will assign a client supplied UserID to be used to
 access all the specified Apps and all the participating Apps of all the
 specified Groups. The options on this endpoint will supercede all the
@@ -252,10 +252,10 @@ options set on App(s)/Group(s). The UserIDs generated will expire after
 a period defined by the 'userid_ttl' option and/or the backend mount's
 maximum TTL value.`
 
-const pathGenericCredsHelpSys = `Generate UserID against any combination of registered App(s)
+const pathSuperGroupCredsHelpSys = `Generate UserID against any combination of registered App(s)
 and/or Group(s), with custom options.`
 
-const pathGenericCredsHelpDesc = `The UserID generated using this endpoint will be able to
+const pathSuperGroupCredsHelpDesc = `The UserID generated using this endpoint will be able to
 access all the specified Apps and all the participating Apps of all the
 specified Groups. The options specified on this endpoint will supercede
 all the options set on App(s)/Group(s). The UserIDs generated will expire

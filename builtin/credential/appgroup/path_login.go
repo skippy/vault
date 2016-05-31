@@ -88,9 +88,9 @@ func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldDat
 const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'user_id'."
 
 const pathLoginHelpDesc = `The supplied UserID could've been generated/assigned against an
-individual App, or a Group or a 'generic' combination of both.
+individual App, or a Group or a 'supergroup' combination of both.
 The respective 'selector' for these categories of UserIDs are
-'app/<app_name>', 'group/<group_name>' or 'generic'. The supplied
+'app/<app_name>', 'group/<group_name>' or 'supergroup'. The supplied
 credentials <'selector','user_id'> are validated and a Vault token
 is issued with effective capabilities to access the participating
 Apps.

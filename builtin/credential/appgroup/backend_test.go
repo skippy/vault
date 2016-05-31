@@ -59,8 +59,8 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 		// Create the lock for making changes to the Groups registered with the backend
 		groupLock: &sync.RWMutex{},
 
-		// Create the lock for making changes to the storage entries of "generic" mode
-		genericLock: &sync.RWMutex{},
+		// Create the lock for making changes to the storage entries of "supergroup" mode
+		superGroupLock: &sync.RWMutex{},
 
 		// Create the map of locks to hold locks that are used to modify the created
 		// UserIDs.
@@ -87,7 +87,7 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 		Paths: framework.PathAppend(
 			appPaths(b),
 			groupPaths(b),
-			genericPaths(b),
+			superGroupPaths(b),
 			[]*framework.Path{
 				pathLogin(b),
 				pathTidyUserID(b),

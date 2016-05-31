@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/vault/logical"
 )
 
-func TestBackend_generic_creds(t *testing.T) {
+func TestBackend_supergroup_creds(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
@@ -47,7 +47,7 @@ func TestBackend_generic_creds(t *testing.T) {
 	resp, err = b.HandleRequest(groupReq)
 	failOnError(t, resp, err)
 
-	genericData := map[string]interface{}{
+	superGroupData := map[string]interface{}{
 		"groups":              "group1",
 		"apps":                "app1",
 		"additional_policies": "x,y,z",
@@ -57,23 +57,23 @@ func TestBackend_generic_creds(t *testing.T) {
 		"token_max_ttl":       502,
 	}
 
-	genericCredsReq := &logical.Request{
+	superGroupCredsReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "generic/creds",
+		Path:      "supergroup/creds",
 		Storage:   storage,
-		Data:      genericData,
+		Data:      superGroupData,
 	}
-	resp, err = b.HandleRequest(genericCredsReq)
+	resp, err = b.HandleRequest(superGroupCredsReq)
 	failOnError(t, resp, err)
 	if resp.Data["user_id"].(string) == "" {
 		t.Fatalf("failed to generate user_id")
 	}
 
-	genericCredsReq.Path = "generic/creds-specific"
-	genericData["user_id"] = "abcd123"
-	resp, err = b.HandleRequest(genericCredsReq)
+	superGroupCredsReq.Path = "supergroup/creds-specific"
+	superGroupData["user_id"] = "abcd123"
+	resp, err = b.HandleRequest(superGroupCredsReq)
 	failOnError(t, resp, err)
 	if resp.Data["user_id"] != "abcd123" {
-		t.Fatalf("failed to set specific user_id to generic")
+		t.Fatalf("failed to set specific user_id to supergroup")
 	}
 }
