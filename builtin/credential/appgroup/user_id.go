@@ -202,22 +202,12 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 // types. But, if same specific UserIDs are assigned across different selector
 // types, then it should be supported.
 func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValue, userID string) (bool, error) {
-	// If there is no lock indexed by the UserID in the map of locks,
-	// it implies that there is no storage entry corresponding to the
-	// UserID. It is either that the ID is an invalid one or that the
-	// UserID is expired. Fail the validation.
-	b.userIDLocksMapLock.RLock()
-	lock := b.userIDLocksMap[userID]
-	if lock == nil {
-		defer b.userIDLocksMapLock.RUnlock()
-		return false, nil
-	}
-
+	// Prepare the storage index for the userID
 	entryIndex := fmt.Sprintf("userid/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(userID)))
+	// Acquire a lock to read/write userID
+	lock := b.getUserIDLock(userID)
 
 	lock.RLock()
-	// It is safe to release the lock on the map of locks after acquiring the user ID lock
-	b.userIDLocksMapLock.RUnlock()
 
 	result := userIDStorageEntry{}
 	if entry, err := s.Get(entryIndex); err != nil {
@@ -243,9 +233,6 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 	// in the storage. Switch the lock from a `read` to a `write` and update
 	// the storage entry.
 	lock.RUnlock()
-
-	b.userIDLocksMapLock.Lock()
-	defer b.userIDLocksMapLock.Unlock()
 
 	lock.Lock()
 	defer lock.Unlock()
@@ -277,8 +264,6 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 				return false, err
 			}
 		}
-		// Reset the lock that is used to modify the UserID's storage entry.
-		b.userIDLocksMap[userID] = nil
 	} else {
 		// If the use count is greater than one, decrement it and update the last updated time.
 		result.NumUses -= 1
@@ -293,25 +278,62 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 	return true, nil
 }
 
+func (b *backend) getUserIDLock(userID string) *sync.RWMutex {
+	// Find our multilevel lock, or fall back to global
+	var lock *sync.RWMutex
+	var ok bool
+	if len(userID) >= 2 {
+		lock, ok = b.userIDLocksMap[userID[0:2]]
+	}
+	if !ok || lock == nil {
+		// Fall back for custom user IDs
+		lock = b.userIDLocksMap["custom"]
+	}
+
+	return lock
+}
+
 // registerUserIDEntry creates a new storage entry for the given UserID.
 // Successful creation of the storage entry results in the creation of a
 // lock in the map of locks maintained at the backend. The index into the
 // map is the UserID itself. During login, if the UserID supplied is not
 // having a corresponding lock in the map, the login attempt fails.
 func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorValue, userID string, userIDEntry *userIDStorageEntry) error {
-	b.userIDLocksMapLock.RLock()
-	if b.userIDLocksMap[userID] != nil {
-		b.userIDLocksMapLock.RUnlock()
+
+	// Prepare the storage index for the userID
+	entryIndex := fmt.Sprintf("userid/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(userID)))
+
+	// Acquire a lock to read/write userID
+	lock := b.getUserIDLock(userID)
+
+	// See if there is already an entry for the given UserID
+	lock.RLock()
+	entry, err := s.Get(entryIndex)
+	if err != nil {
+		lock.RUnlock()
+		return err
+	}
+	if entry != nil {
+		lock.RUnlock()
 		return fmt.Errorf("user ID is already registered")
 	}
-	b.userIDLocksMapLock.RUnlock()
 
-	b.userIDLocksMapLock.Lock()
-	defer b.userIDLocksMapLock.Unlock()
+	// If there isn't an entry for the userID already, switch the read lock
+	// with a write lock and create an entry. But before saving a new entry,
+	// check if the userID entry was created during the lock switch.
+	lock.RUnlock()
+	lock.Lock()
+	defer lock.Unlock()
 
-	if b.userIDLocksMap[userID] != nil {
+	entry, err = s.Get(entryIndex)
+	if err != nil {
+		return err
+	}
+	if entry != nil {
 		return fmt.Errorf("user ID is already registered")
 	}
+
+	// UserID was not created during the lock switch. Create a new entry.
 
 	// Set the creation time for the UserID
 	currentTime := time.Now().UTC()
@@ -327,17 +349,12 @@ func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorV
 		userIDEntry.ExpirationTime = currentTime.Add(userIDEntry.UserIDTTL)
 	}
 
-	// Create a storage entry for the UserID
-	entryIndex := fmt.Sprintf("userid/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(userID)))
 	if entry, err := logical.StorageEntryJSON(entryIndex, userIDEntry); err != nil {
 		return err
 	} else if err = s.Put(entry); err != nil {
 		return err
 	}
 
-	// After the storage entry is created, create a lock to access the storage entry
-	// The UserID entry which is stored above can/should only be modified using this lock.
-	b.userIDLocksMap[userID] = &sync.RWMutex{}
 	return nil
 }
 

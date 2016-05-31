@@ -1,6 +1,8 @@
 package appgroup
 
 import (
+	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/hashicorp/vault/helper/salt"
@@ -30,9 +32,6 @@ type backend struct {
 	// update the information related to it, 'num_uses' for example.
 	// The lock will be deleted when the UserID is delted.
 	userIDLocksMap map[string]*sync.RWMutex
-
-	// Guard to access the map containing locks to manage UserID storage entries
-	userIDLocksMapLock *sync.RWMutex
 }
 
 func Factory(conf *logical.BackendConfig) (logical.Backend, error) {
@@ -69,10 +68,13 @@ func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
 		// Create the map of locks to hold locks that are used to modify the created
 		// UserIDs.
 		userIDLocksMap: map[string]*sync.RWMutex{},
-
-		// Create a lock to safely access the map of UserID locks
-		userIDLocksMapLock: &sync.RWMutex{},
 	}
+
+	for i := int64(0); i < 256; i++ {
+		b.userIDLocksMap[fmt.Sprintf("%2x",
+			strconv.FormatInt(i, 16))] = &sync.RWMutex{}
+	}
+	b.userIDLocksMap["custom"] = &sync.RWMutex{}
 
 	// Attach the paths and secrets that are to be handled by the backend
 	b.Backend = &framework.Backend{

@@ -1,6 +1,8 @@
 package appgroup
 
 import (
+	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -38,6 +40,7 @@ func createBackendWithStorage(t *testing.T) (*backend, *logical.InmemStorage) {
 }
 
 func createBackend(conf *logical.BackendConfig) (*backend, error) {
+	// Initialize the salt
 	salt, err := salt.NewSalt(conf.StorageView, &salt.Config{
 		HashFunc: salt.SHA256Hash,
 	})
@@ -45,16 +48,34 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 		return nil, err
 	}
 
+	// Create a backend object
 	b := &backend{
-		salt:               salt,
-		appLock:            &sync.RWMutex{},
-		groupLock:          &sync.RWMutex{},
-		genericLock:        &sync.RWMutex{},
-		userIDLocksMap:     map[string]*sync.RWMutex{},
-		userIDLocksMapLock: &sync.RWMutex{},
+		// Set the salt object for the backend
+		salt: salt,
+
+		// Create the lock for making changes to the Apps registered with the backend
+		appLock: &sync.RWMutex{},
+
+		// Create the lock for making changes to the Groups registered with the backend
+		groupLock: &sync.RWMutex{},
+
+		// Create the lock for making changes to the storage entries of "generic" mode
+		genericLock: &sync.RWMutex{},
+
+		// Create the map of locks to hold locks that are used to modify the created
+		// UserIDs.
+		userIDLocksMap: map[string]*sync.RWMutex{},
 	}
 
+	for i := int64(0); i < 256; i++ {
+		b.userIDLocksMap[fmt.Sprintf("%2x",
+			strconv.FormatInt(i, 16))] = &sync.RWMutex{}
+	}
+	b.userIDLocksMap["custom"] = &sync.RWMutex{}
+
+	// Attach the paths and secrets that are to be handled by the backend
 	b.Backend = &framework.Backend{
+		// Register a periodic function that deletes the expired UserID entries
 		PeriodicFunc: b.periodicFunc,
 		Help:         backendHelp,
 		AuthRenew:    b.pathLoginRenew,
