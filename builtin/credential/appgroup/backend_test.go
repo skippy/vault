@@ -11,15 +11,6 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-func failOnError(t *testing.T, resp *logical.Response, err error) {
-	if resp != nil && resp.IsError() {
-		t.Fatalf("error returned in response: %s", resp.Data["error"])
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func createBackendWithStorage(t *testing.T) (*backend, *logical.InmemStorage) {
 	config := logical.TestBackendConfig()
 	storage := &logical.InmemStorage{}

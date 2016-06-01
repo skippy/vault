@@ -40,7 +40,9 @@ func TestBackend_supergroup_login(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(superGroupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	loginData := map[string]interface{}{
 		"selector": selectorTypeSuperGroup,
@@ -53,7 +55,10 @@ func TestBackend_supergroup_login(t *testing.T) {
 		Data:      loginData,
 	}
 	resp, err = b.HandleRequest(loginReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Auth == nil {
 		t.Fatalf("expected a non-nil auth object in the response")
 	}
@@ -78,7 +83,9 @@ func TestBackend_group_login(t *testing.T) {
 		Storage:   storage,
 	}
 	resp, err = b.HandleRequest(groupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	loginData := map[string]interface{}{
 		"selector": "group/group1",
@@ -91,7 +98,10 @@ func TestBackend_group_login(t *testing.T) {
 		Data:      loginData,
 	}
 	resp, err = b.HandleRequest(loginReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Auth == nil {
 		t.Fatalf("expected a non-nil auth object in the response")
 	}
@@ -115,7 +125,9 @@ func TestBackend_app_login(t *testing.T) {
 		Storage:   storage,
 	}
 	resp, err = b.HandleRequest(appCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	loginData := map[string]interface{}{
 		"selector": "app/app1",
@@ -128,7 +140,10 @@ func TestBackend_app_login(t *testing.T) {
 		Data:      loginData,
 	}
 	resp, err = b.HandleRequest(loginReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Auth == nil {
 		t.Fatalf("expected a non-nil auth object in the response")
 	}

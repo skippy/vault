@@ -26,7 +26,9 @@ func TestBackend_supergroup_creds(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupData := map[string]interface{}{
 		"apps":                "app1",
@@ -45,7 +47,9 @@ func TestBackend_supergroup_creds(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	superGroupData := map[string]interface{}{
 		"groups":              "group1",
@@ -64,7 +68,10 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		Data:      superGroupData,
 	}
 	resp, err = b.HandleRequest(superGroupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"].(string) == "" {
 		t.Fatalf("failed to generate user_id")
 	}
@@ -72,7 +79,10 @@ func TestBackend_supergroup_creds(t *testing.T) {
 	superGroupCredsReq.Path = "supergroup/creds-specific"
 	superGroupData["user_id"] = "abcd123"
 	resp, err = b.HandleRequest(superGroupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"] != "abcd123" {
 		t.Fatalf("failed to set specific user_id to supergroup")
 	}

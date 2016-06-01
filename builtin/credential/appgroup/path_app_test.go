@@ -26,7 +26,9 @@ func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies st
 	}
 
 	resp, err := b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 }
 
 func TestBackend_app_creds(t *testing.T) {
@@ -49,7 +51,9 @@ func TestBackend_app_creds(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	appCredsReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -57,7 +61,10 @@ func TestBackend_app_creds(t *testing.T) {
 		Storage:   storage,
 	}
 	resp, err = b.HandleRequest(appCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"].(string) == "" {
 		t.Fatalf("failed to generate user_id")
 	}
@@ -69,7 +76,10 @@ func TestBackend_app_creds(t *testing.T) {
 	appCredsReq.Data = appCredsSpecificData
 	appCredsReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"] != "abcd123" {
 		t.Fatalf("failed to set specific user_id to app")
 	}
@@ -95,11 +105,15 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	expected := map[string]interface{}{
 		"policies":      []string{"default", "p", "q", "r", "s"},
@@ -135,11 +149,15 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Operation = logical.UpdateOperation
 
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	expected = map[string]interface{}{
 		"policies":      []string{"a", "b", "c", "d", "default"},
@@ -166,23 +184,38 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1/policies"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Data = map[string]interface{}{"policies": "a1,b1,c1,d1"}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if !reflect.DeepEqual(resp.Data["policies"].([]string), []string{"a1", "b1", "c1", "d1", "default"}) {
 		t.Fatalf("bad: policies: actual:%s\n", resp.Data["policies"].([]string))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["policies"].([]string) != nil {
 		t.Fatalf("expected value to be reset")
 	}
@@ -191,23 +224,38 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1/num-uses"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Data = map[string]interface{}{"num_uses": 200}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["num_uses"].(int) != 200 {
 		t.Fatalf("bad: num_uses: expected:200 actual:%d\n", resp.Data["num_uses"].(int))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["num_uses"].(int) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -216,23 +264,38 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1/userid-ttl"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Data = map[string]interface{}{"userid_ttl": 3001}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["userid_ttl"].(time.Duration) != 3001 {
 		t.Fatalf("bad: userid_ttl: expected:3001 actual:%d\n", resp.Data["userid_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["userid_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -241,23 +304,38 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1/token-ttl"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Data = map[string]interface{}{"token_ttl": 4001}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_ttl"].(time.Duration) != 4001 {
 		t.Fatalf("bad: token_ttl: expected:4001 actual:%d\n", resp.Data["token_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -266,23 +344,38 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1/token-max-ttl"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Data = map[string]interface{}{"token_max_ttl": 5001}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_max_ttl"].(time.Duration) != 5001 {
 		t.Fatalf("bad: token_max_ttl: expected:5001 actual:%d\n", resp.Data["token_max_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_max_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -291,11 +384,16 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appReq.Path = "app/app1"
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp != nil {
 		t.Fatalf("expected a nil response")
 	}

@@ -27,7 +27,10 @@ func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, a
 	}
 
 	resp, err := b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 }
 func TestBackend_group_creds(t *testing.T) {
 	var resp *logical.Response
@@ -49,7 +52,9 @@ func TestBackend_group_creds(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(appReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupData := map[string]interface{}{
 		"apps":                "app1",
@@ -68,7 +73,9 @@ func TestBackend_group_creds(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupCredsReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -76,7 +83,10 @@ func TestBackend_group_creds(t *testing.T) {
 		Storage:   storage,
 	}
 	resp, err = b.HandleRequest(groupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"].(string) == "" {
 		t.Fatalf("failed to generate user_id")
 	}
@@ -88,7 +98,10 @@ func TestBackend_group_creds(t *testing.T) {
 	groupCredsReq.Data = groupCredsSpecificData
 	groupCredsReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupCredsReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["user_id"] != "abcd123" {
 		t.Fatalf("failed to set specific user_id to group")
 	}
@@ -114,11 +127,15 @@ func TestBackend_group_CRUD(t *testing.T) {
 	}
 
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	expected := map[string]interface{}{
 		"apps":                []string{"app1", "app2"},
@@ -156,11 +173,15 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Operation = logical.UpdateOperation
 
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	expected = map[string]interface{}{
 		"apps":                []string{"app11", "app21"},
@@ -188,23 +209,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/apps"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"apps": "application1,application2"}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if !reflect.DeepEqual(resp.Data["apps"].([]string), []string{"application1", "application2"}) {
 		t.Fatalf("bad: apps: actual:%s\n", resp.Data["apps"].([]string))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["apps"].([]string) != nil {
 		t.Fatalf("expected value to be reset")
 	}
@@ -213,23 +249,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/additional-policies"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"additional_policies": "a1,b1,c1,d1"}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if !reflect.DeepEqual(resp.Data["additional_policies"].([]string), []string{"a1", "b1", "c1", "d1", "default"}) {
 		t.Fatalf("bad: additional_policies: actual:%s\n", resp.Data["additional_policies"].([]string))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["additional_policies"].([]string) != nil {
 		t.Fatalf("expected value to be reset")
 	}
@@ -238,23 +289,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/num-uses"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"num_uses": 200}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["num_uses"].(int) != 200 {
 		t.Fatalf("bad: num_uses: expected:200 actual:%d\n", resp.Data["num_uses"].(int))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["num_uses"].(int) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -263,23 +329,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/userid-ttl"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"userid_ttl": 3001}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["userid_ttl"].(time.Duration) != 3001 {
 		t.Fatalf("bad: userid_ttl: expected:3001 actual:%d\n", resp.Data["userid_ttl"].(time.Duration))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["userid_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -288,23 +369,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/token-ttl"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"token_ttl": 4001}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_ttl"].(time.Duration) != 4001 {
 		t.Fatalf("bad: token_ttl: expected:4001 actual:%d\n", resp.Data["token_ttl"].(time.Duration))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -313,23 +409,38 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1/token-max-ttl"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Data = map[string]interface{}{"token_max_ttl": 5001}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_max_ttl"].(time.Duration) != 5001 {
 		t.Fatalf("bad: token_max_ttl: expected:5001 actual:%d\n", resp.Data["token_max_ttl"].(time.Duration))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp.Data["token_max_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
@@ -338,11 +449,16 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupReq.Path = "group/group1"
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
 
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
-	failOnError(t, resp, err)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 	if resp != nil {
 		t.Fatalf("expected a nil response")
 	}
