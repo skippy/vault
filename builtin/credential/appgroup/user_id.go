@@ -189,7 +189,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 		return nil, err
 	}
 
-	resp.Policies = policyutil.SanitizePolicies(resp.Policies)
+	resp.Policies = policyutil.SanitizePolicies(resp.Policies, true)
 
 	return resp, nil
 }
