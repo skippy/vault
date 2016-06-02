@@ -53,6 +53,7 @@ type groupStorageEntry struct {
 // group/<group_name>/secret_id-ttl
 // group/<group_name>/token-ttl
 // group/<group_name>/token-max-ttl
+// group/<group_name>/selector-id
 // group/<group_name>/secret-id
 // group/<group_name>/custom-secret-id
 func groupPaths(b *backend) []*framework.Path {
@@ -260,6 +261,20 @@ addition to those, a set of policies can be assigned using this.
 			},
 			HelpSynopsis:    strings.TrimSpace(groupHelp["group-token-max-ttl"][0]),
 			HelpDescription: strings.TrimSpace(groupHelp["group-token-max-ttl"][1]),
+		},
+		&framework.Path{
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/selector-id$",
+			Fields: map[string]*framework.FieldSchema{
+				"group_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the Group.",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation: b.pathGroupSelectorIDRead,
+			},
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-selector-id"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-selector-id"][1]),
 		},
 		&framework.Path{
 			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret-id$",
@@ -673,6 +688,25 @@ func (b *backend) pathGroupSecretIDNumUsesUpdate(req *logical.Request, data *fra
 	}
 }
 
+func (b *backend) pathGroupSelectorIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	if group, err := b.groupEntry(req.Storage, strings.ToLower(groupName)); err != nil {
+		return nil, err
+	} else if group == nil {
+		return nil, nil
+	} else {
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"selector_id": group.SelectorID,
+			},
+		}, nil
+	}
+}
+
 func (b *backend) pathGroupSecretIDNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
@@ -1017,6 +1051,12 @@ are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximux TTL value.`,
+	},
+	"group-selector-id": {
+		"Returns the 'selector_id' of the Group.",
+		`If login is performed from a Group, then its 'selector_id' should be presented
+as a credential during the login. This 'selector_id' can be retrieved using
+this endpoint.`,
 	},
 	"group-secret-id": {
 		"Generate a SecretID against this Group.",

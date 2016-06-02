@@ -47,6 +47,7 @@ type appStorageEntry struct {
 // app/<app_name>/token-ttl
 // app/<app_name>/token-max-ttl
 // app/<app_name>/bind-secret-id
+// app/<app_name>/selector-id
 // app/<app_name>/secret-id
 // app/<app_name>/custom-secret-id
 func appPaths(b *backend) []*framework.Path {
@@ -222,6 +223,20 @@ func appPaths(b *backend) []*framework.Path {
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-token-max-ttl"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-token-max-ttl"][1]),
+		},
+		&framework.Path{
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/selector-id$",
+			Fields: map[string]*framework.FieldSchema{
+				"app_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the App.",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation: b.pathAppSelectorIDRead,
+			},
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-selector-id"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-selector-id"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id$",
@@ -580,6 +595,25 @@ func (b *backend) pathAppSecretIDNumUsesUpdate(req *logical.Request, data *frame
 	}
 }
 
+func (b *backend) pathAppSelectorIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	if app, err := b.appEntry(req.Storage, strings.ToLower(appName)); err != nil {
+		return nil, err
+	} else if app == nil {
+		return nil, nil
+	} else {
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"selector_id": app.SelectorID,
+			},
+		}, nil
+	}
+}
+
 func (b *backend) pathAppSecretIDNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
@@ -918,6 +952,12 @@ are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximum TTL value.`,
+	},
+	"app-selector-id": {
+		"Returns the 'selector_id' of the App.",
+		`If login is performed from an App, then its 'selector_id' should be presented
+as a credential during the login. This 'selector_id' can be retrieved using
+this endpoint.`,
 	},
 	"app-secret-id": {
 		"Generate a SecretID against this App.",
