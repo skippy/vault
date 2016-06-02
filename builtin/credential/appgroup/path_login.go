@@ -14,12 +14,12 @@ func pathLogin(b *backend) *framework.Path {
 		Fields: map[string]*framework.FieldSchema{
 			"selector": &framework.FieldSchema{
 				Type:        framework.TypeString,
-				Description: "Identifier of the category the UserID belongs to.",
+				Description: "Identifier of the category the SecretID belongs to.",
 			},
-			"user_id": &framework.FieldSchema{
+			"secret_id": &framework.FieldSchema{
 				Type:        framework.TypeString,
 				Default:     "",
-				Description: "UserID of the App.",
+				Description: "SecretID of the App.",
 			},
 		},
 		Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -45,28 +45,28 @@ func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData
 }
 
 func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	userID := strings.TrimSpace(data.Get("user_id").(string))
-	if userID == "" {
-		return logical.ErrorResponse("missing user_id"), nil
+	secretID := strings.TrimSpace(data.Get("secret_id").(string))
+	if secretID == "" {
+		return logical.ErrorResponse("missing secret_id"), nil
 	}
 
-	// Selector can optionally be prepended to the UserID with a `;` delimiter
+	// Selector can optionally be prepended to the SecretID with a `;` delimiter
 	selector := strings.TrimSpace(data.Get("selector").(string))
 	if selector == "" {
-		selectorFields := strings.SplitN(userID, ";", 2)
+		selectorFields := strings.SplitN(secretID, ";", 2)
 		if len(selectorFields) != 2 || selectorFields[0] == "" {
 			return logical.ErrorResponse("missing selector"), nil
 		} else if selectorFields[1] == "" {
-			return logical.ErrorResponse("missing user_id"), nil
+			return logical.ErrorResponse("missing secret_id"), nil
 		} else {
 			selector = selectorFields[0]
-			userID = selectorFields[1]
+			secretID = selectorFields[1]
 		}
 	}
 
-	validateResp, err := b.validateCredentials(req.Storage, selector, userID)
+	validateResp, err := b.validateCredentials(req.Storage, selector, secretID)
 	if err != nil {
-		return logical.ErrorResponse(fmt.Sprintf("failed to validate user ID: %s", err)), nil
+		return logical.ErrorResponse(fmt.Sprintf("failed to validate secret ID: %s", err)), nil
 	}
 
 	resp := &logical.Response{
@@ -85,13 +85,13 @@ func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldDat
 	return resp, nil
 }
 
-const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'user_id'."
+const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'secret_id'."
 
-const pathLoginHelpDesc = `The supplied UserID could've been generated/assigned against an
+const pathLoginHelpDesc = `The supplied SecretID could've been generated/assigned against an
 individual App, or a Group or a 'supergroup' combination of both.
-The respective 'selector' for these categories of UserIDs are
+The respective 'selector' for these categories of SecretIDs are
 'app/<app_name>', 'group/<group_name>' or 'supergroup'. The supplied
-credentials <'selector','user_id'> are validated and a Vault token
+credentials <'selector','secret_id'> are validated and a Vault token
 is issued with effective capabilities to access the participating
 Apps.
 `

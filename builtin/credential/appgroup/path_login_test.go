@@ -27,7 +27,7 @@ func TestBackend_supergroup_login(t *testing.T) {
 		"apps":                "app1,app2",
 		"additional_policies": "s,t",
 		"num_uses":            122,
-		"userid_ttl":          302,
+		"secret_id_ttl":       302,
 		"token_ttl":           402,
 		"token_max_ttl":       502,
 	}
@@ -45,8 +45,8 @@ func TestBackend_supergroup_login(t *testing.T) {
 	}
 
 	loginData := map[string]interface{}{
-		"selector": selectorTypeSuperGroup,
-		"user_id":  resp.Data["user_id"],
+		"selector":  selectorTypeSuperGroup,
+		"secret_id": resp.Data["secret_id"],
 	}
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,
@@ -88,8 +88,8 @@ func TestBackend_group_login(t *testing.T) {
 	}
 
 	loginData := map[string]interface{}{
-		"selector": "group/group1",
-		"user_id":  resp.Data["user_id"],
+		"selector":  "group/group1",
+		"secret_id": resp.Data["secret_id"],
 	}
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,
@@ -130,8 +130,8 @@ func TestBackend_app_login(t *testing.T) {
 	}
 
 	loginData := map[string]interface{}{
-		"selector": "app/app1",
-		"user_id":  resp.Data["user_id"],
+		"selector":  "app/app1",
+		"secret_id": resp.Data["secret_id"],
 	}
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,

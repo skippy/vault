@@ -18,11 +18,11 @@ type groupStorageEntry struct {
 	// All the participating Apps of the Group
 	Apps []string `json:"apps" structs:"apps" mapstructure:"apps"`
 
-	// Number of times the UserID generated against the Group can be used to perform login
+	// Number of times the SecretID generated against the Group can be used to perform login
 	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
 
-	// Duration (less than the backend mount's max TTL) after which a UserID generated against the Group will expire
-	UserIDTTL time.Duration `json:"userid_ttl" structs:"userid_ttl" mapstructure:"userid_ttl"`
+	// Duration (less than the backend mount's max TTL) after which a SecretID generated against the Group will expire
+	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
 
 	// Duration before which an issued token must be renewed
 	TokenTTL time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
@@ -31,7 +31,7 @@ type groupStorageEntry struct {
 	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
 
 	// Along with the combined set of Apps' policies, the policies in this list will be
-	// added to capabilities of the token issued, when a UserID generated against a Group
+	// added to capabilities of the token issued, when a SecretID generated against a Group
 	// is used perform the login.
 	AdditionalPolicies []string `json:"additional_policies" structs:"additional_policies" mapstructure:"additional_policies"`
 }
@@ -43,7 +43,7 @@ type groupStorageEntry struct {
 // group/<group_name>
 // group/policies
 // group/num-uses
-// group/userid-ttl
+// group/secret_id-ttl
 // group/token-ttl
 // group/token-max-ttl
 // group/<group_name>/creds
@@ -73,18 +73,18 @@ func groupPaths(b *backend) []*framework.Path {
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
 					Default: "",
-					Description: `Comma separated list of policies for the Group. The UserID created against the Group,
+					Description: `Comma separated list of policies for the Group. The SecretID created against the Group,
 will have access to the union of all the policies of the Apps. In
 addition to those, a set of policies can be assigned using this.
 `,
 				},
 				"num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a UserID can access the Apps represented by the Group.",
+					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
-				"userid_ttl": &framework.FieldSchema{
+				"secret_id_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
-					Description: "Duration in seconds after which the issued UserID should expire.",
+					Description: "Duration in seconds after which the issued SecretID should expire.",
 				},
 				"token_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
@@ -135,7 +135,7 @@ addition to those, a set of policies can be assigned using this.
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
 					Default: "",
-					Description: `Comma separated list of policies for the Group. The UserID created against the Group,
+					Description: `Comma separated list of policies for the Group. The SecretID created against the Group,
 will have access to the union of all the policies of the Apps. In
 addition to those, a set of policies can be assigned using this.
 `,
@@ -158,7 +158,7 @@ addition to those, a set of policies can be assigned using this.
 				},
 				"num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a UserID can access the Apps represented by the Group.",
+					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -170,24 +170,24 @@ addition to those, a set of policies can be assigned using this.
 			HelpDescription: strings.TrimSpace(groupHelp["group-num-uses"][1]),
 		},
 		&framework.Path{
-			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/userid-ttl$",
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret_id-ttl$",
 			Fields: map[string]*framework.FieldSchema{
 				"group_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Name of the Group.",
 				},
-				"userid_ttl": &framework.FieldSchema{
+				"secret_id_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
-					Description: "Duration in seconds after which the issued UserID should expire.",
+					Description: "Duration in seconds after which the issued SecretID should expire.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathGroupUserIDTTLUpdate,
-				logical.ReadOperation:   b.pathGroupUserIDTTLRead,
-				logical.DeleteOperation: b.pathGroupUserIDTTLDelete,
+				logical.UpdateOperation: b.pathGroupSecretIDTTLUpdate,
+				logical.ReadOperation:   b.pathGroupSecretIDTTLRead,
+				logical.DeleteOperation: b.pathGroupSecretIDTTLDelete,
 			},
-			HelpSynopsis:    strings.TrimSpace(groupHelp["group-userid-ttl"][0]),
-			HelpDescription: strings.TrimSpace(groupHelp["group-userid-ttl"][1]),
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-secret_id-ttl"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-secret_id-ttl"][1]),
 		},
 		&framework.Path{
 			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/token-ttl$",
@@ -250,10 +250,10 @@ addition to those, a set of policies can be assigned using this.
 					Type:        framework.TypeString,
 					Description: "Name of the Group.",
 				},
-				"user_id": &framework.FieldSchema{
+				"secret_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Default:     "",
-					Description: "UserID to be attached to the App.",
+					Description: "SecretID to be attached to the App.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -350,10 +350,10 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		return logical.ErrorResponse("num_uses cannot be negative"), nil
 	}
 
-	if userIDTTLRaw, ok := data.GetOk("userid_ttl"); ok {
-		group.UserIDTTL = time.Second * time.Duration(userIDTTLRaw.(int))
+	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
+		group.SecretIDTTL = time.Second * time.Duration(secretIDTTLRaw.(int))
 	} else if req.Operation == logical.CreateOperation {
-		group.UserIDTTL = time.Second * time.Duration(data.Get("userid_ttl").(int))
+		group.SecretIDTTL = time.Second * time.Duration(data.Get("secret_id_ttl").(int))
 	}
 
 	if tokenTTLRaw, ok := data.GetOk("token_ttl"); ok {
@@ -389,7 +389,7 @@ func (b *backend) pathGroupRead(req *logical.Request, data *framework.FieldData)
 		return nil, nil
 	} else {
 		// Convert the values to second
-		group.UserIDTTL = group.UserIDTTL / time.Second
+		group.SecretIDTTL = group.SecretIDTTL / time.Second
 		group.TokenTTL = group.TokenTTL / time.Second
 		group.TokenMaxTTL = group.TokenMaxTTL / time.Second
 
@@ -594,7 +594,7 @@ func (b *backend) pathGroupNumUsesDelete(req *logical.Request, data *framework.F
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
 
-func (b *backend) pathGroupUserIDTTLUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDTTLUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -608,15 +608,15 @@ func (b *backend) pathGroupUserIDTTLUpdate(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	if userIDTTLRaw, ok := data.GetOk("userid_ttl"); ok {
-		group.UserIDTTL = time.Second * time.Duration(userIDTTLRaw.(int))
+	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
+		group.SecretIDTTL = time.Second * time.Duration(secretIDTTLRaw.(int))
 		return nil, b.setGroupEntry(req.Storage, groupName, group)
 	} else {
-		return logical.ErrorResponse("missing userid_ttl"), nil
+		return logical.ErrorResponse("missing secret_id_ttl"), nil
 	}
 }
 
-func (b *backend) pathGroupUserIDTTLRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDTTLRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -627,16 +627,16 @@ func (b *backend) pathGroupUserIDTTLRead(req *logical.Request, data *framework.F
 	} else if group == nil {
 		return nil, nil
 	} else {
-		group.UserIDTTL = group.UserIDTTL / time.Second
+		group.SecretIDTTL = group.SecretIDTTL / time.Second
 		return &logical.Response{
 			Data: map[string]interface{}{
-				"userid_ttl": group.UserIDTTL,
+				"secret_id_ttl": group.SecretIDTTL,
 			},
 		}, nil
 	}
 }
 
-func (b *backend) pathGroupUserIDTTLDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDTTLDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -650,7 +650,7 @@ func (b *backend) pathGroupUserIDTTLDelete(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	group.UserIDTTL = (&groupStorageEntry{}).UserIDTTL
+	group.SecretIDTTL = (&groupStorageEntry{}).SecretIDTTL
 
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
@@ -784,25 +784,25 @@ func (b *backend) pathGroupTokenMaxTTLDelete(req *logical.Request, data *framewo
 }
 
 func (b *backend) pathGroupCredsRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	userID, err := uuid.GenerateUUID()
+	secretID, err := uuid.GenerateUUID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate UserID:%s", err)
+		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
 	}
-	return b.handleGroupCredsCommon(req, data, userID)
+	return b.handleGroupCredsCommon(req, data, secretID)
 }
 
 func (b *backend) pathGroupCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleGroupCredsCommon(req, data, data.Get("user_id").(string))
+	return b.handleGroupCredsCommon(req, data, data.Get("secret_id").(string))
 }
 
-func (b *backend) handleGroupCredsCommon(req *logical.Request, data *framework.FieldData, userID string) (*logical.Response, error) {
+func (b *backend) handleGroupCredsCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
 	}
 
-	if userID == "" {
-		return logical.ErrorResponse("missing user_id"), nil
+	if secretID == "" {
+		return logical.ErrorResponse("missing secret_id"), nil
 	}
 
 	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
@@ -813,17 +813,17 @@ func (b *backend) handleGroupCredsCommon(req *logical.Request, data *framework.F
 		return logical.ErrorResponse(fmt.Sprintf("Group %s does not exist", groupName)), nil
 	}
 
-	if err = b.registerUserIDEntry(req.Storage, selectorTypeGroup, groupName, userID, &userIDStorageEntry{
-		NumUses:   group.NumUses,
-		UserIDTTL: group.UserIDTTL,
+	if err = b.registerSecretIDEntry(req.Storage, selectorTypeGroup, groupName, secretID, &secretIDStorageEntry{
+		NumUses:     group.NumUses,
+		SecretIDTTL: group.SecretIDTTL,
 	}); err != nil {
-		return nil, fmt.Errorf("failed to store user ID: %s", err)
+		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"user_id":  userID,
-			"selector": "group/" + groupName,
+			"secret_id": secretID,
+			"selector":  "group/" + groupName,
 		},
 	}, nil
 }
@@ -850,65 +850,65 @@ effective policies.`,
 login operation is performed. `,
 	},
 	"group-additional-policies": {
-		`Additional policies to be assigned to the tokens issued by using the UserIDs
+		`Additional policies to be assigned to the tokens issued by using the SecretIDs
 that were generated against this group.`,
-		`If a UserID is generated/assigned against this group, and if these UserIDs
+		`If a SecretID is generated/assigned against this group, and if these SecretIDs
 are used to perform a login operation, the tokens issued will have a
 combined set of policies from each participating App. In addition,
 the 'additional_policies' defined using this option will be appended
 to the issued token's effective policies.`,
 	},
 	"group-num-uses": {
-		"Use limit of the UserID generated against the group.",
-		`If the UserIDs are generated/assigned against the group using
+		"Use limit of the SecretID generated against the group.",
+		`If the SecretIDs are generated/assigned against the group using
 'group/<group_name>/creds' or 'group/<group_name>/creds-specific'
-endpoints, then the number of times that these UserIDs can access
+endpoints, then the number of times that these SecretIDs can access
 the participating Apps is defined by this option.`,
 	},
-	"group-userid-ttl": {
-		`Duration in seconds, representing the lifetime of the UserIDs
+	"group-secret_id-ttl": {
+		`Duration in seconds, representing the lifetime of the SecretIDs
 that are generated against the Group using 'group/<group_name>/creds'
 or 'group/<group_name>/creds-specific' endpoints.`,
-		`If the UserIDs are generated against the Group using 'group/<group_name>/creds'
-or 'group/<group_name>/creds-specific' endpoints, then those UserIDs
+		`If the SecretIDs are generated against the Group using 'group/<group_name>/creds'
+or 'group/<group_name>/creds-specific' endpoints, then those SecretIDs
 will expire after the duration specified by this option. Note that this
 value will be capped by the backend mount's maximux TTL value.`,
 	},
 	`group-token-ttl`: {
 		`Duration in seconds, the lifetime of the token issued by using
-the UserID that is generated against this Group, before which the token
+the SecretID that is generated against this Group, before which the token
 needs to be renewed.`,
-		`If UserIDs are generated against the Group, using 'group/<group_name>/creds'
-or the 'group/<group_name>/creds-specific' endpoints, and if those UserIDs
+		`If SecretIDs are generated against the Group, using 'group/<group_name>/creds'
+or the 'group/<group_name>/creds-specific' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-ttl'
 defines the lifetime of the token issued, before which teh token needs
 to be renewed.`,
 	},
 	"group-token-max-ttl": {
-		`Duration in seconds, the maximux lifetime of the tokens issued by using the UserID that were generated against the Group, after which the tokens are not allowed to be renewed.`,
-		`If UserIDs are generated against the Group using 'group/<group_name>/creds'
-or the 'group/<group_name>/creds-specific' endpoints, and if those UserIDs
+		`Duration in seconds, the maximux lifetime of the tokens issued by using the SecretID that were generated against the Group, after which the tokens are not allowed to be renewed.`,
+		`If SecretIDs are generated against the Group using 'group/<group_name>/creds'
+or the 'group/<group_name>/creds-specific' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximux TTL value.`,
 	},
 	"group-creds": {
-		"Generate a UserID against this Group.",
-		`The UserID generated using this endpoint will be scoped to access
-the participant Apps of this Group. The properties of this UserID will
+		"Generate a SecretID against this Group.",
+		`The SecretID generated using this endpoint will be scoped to access
+the participant Apps of this Group. The properties of this SecretID will
 be based on the options set on the Group. It will expire after a period
-defined by the 'userid_ttl' option on the Group and/or the backend mount's
+defined by the 'secret_id_ttl' option on the Group and/or the backend mount's
 maximum TTL value.`,
 	},
 	"group-creds-specific": {
-		"Assign a UserID of choice against the Group.",
+		"Assign a SecretID of choice against the Group.",
 		`This option is not recommended unless there is a specific need
-to do so. This will assign a client supplied UserID to be used to access
-the participating Apps of the Group. This UserID will behavie similarly
-to the UserIDs generated by the backend. The properties of this UserID
+to do so. This will assign a client supplied SecretID to be used to access
+the participating Apps of the Group. This SecretID will behavie similarly
+to the SecretIDs generated by the backend. The properties of this SecretID
 will be based on the options set on the Group. It will expire after a
-period defined by the 'userid_ttl' option on the Group and/or the backend
+period defined by the 'secret_id_ttl' option on the Group and/or the backend
 mount's maximux TTL value.`,
 	},
 }

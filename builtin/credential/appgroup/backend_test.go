@@ -54,19 +54,19 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 		superGroupLock: &sync.RWMutex{},
 
 		// Create the map of locks to hold locks that are used to modify the created
-		// UserIDs.
-		userIDLocksMap: map[string]*sync.RWMutex{},
+		// SecretIDs.
+		secretIDLocksMap: map[string]*sync.RWMutex{},
 	}
 
 	for i := int64(0); i < 256; i++ {
-		b.userIDLocksMap[fmt.Sprintf("%2x",
+		b.secretIDLocksMap[fmt.Sprintf("%2x",
 			strconv.FormatInt(i, 16))] = &sync.RWMutex{}
 	}
-	b.userIDLocksMap["custom"] = &sync.RWMutex{}
+	b.secretIDLocksMap["custom"] = &sync.RWMutex{}
 
 	// Attach the paths and secrets that are to be handled by the backend
 	b.Backend = &framework.Backend{
-		// Register a periodic function that deletes the expired UserID entries
+		// Register a periodic function that deletes the expired SecretID entries
 		PeriodicFunc: b.periodicFunc,
 		Help:         backendHelp,
 		AuthRenew:    b.pathLoginRenew,
@@ -81,7 +81,7 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 			superGroupPaths(b),
 			[]*framework.Path{
 				pathLogin(b),
-				pathTidyUserID(b),
+				pathTidySecretID(b),
 			},
 		),
 	}

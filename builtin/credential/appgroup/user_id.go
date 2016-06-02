@@ -17,20 +17,20 @@ const (
 	selectorTypeSuperGroup = "supergroup"
 )
 
-// userIDStorageEntry represents the information stored in storage when a UserID is created.
-// The structure of the UserID storage entry is the same for all the types of UserIDs generated.
-type userIDStorageEntry struct {
-	// Number of times this UserID can be used to perform the login operation
+// secretIDStorageEntry represents the information stored in storage when a SecretID is created.
+// The structure of the SecretID storage entry is the same for all the types of SecretIDs generated.
+type secretIDStorageEntry struct {
+	// Number of times this SecretID can be used to perform the login operation
 	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
 
-	// Duration after which this UserID should expire. This is capped by the backend mount's
+	// Duration after which this SecretID should expire. This is capped by the backend mount's
 	// max TTL value.
-	UserIDTTL time.Duration `json:"userid_ttl" structs:"userid_ttl" mapstructure:"userid_ttl"`
+	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
 
-	// The time in UTC when the UserID was created
+	// The time in UTC when the SecretID was created
 	CreationTime time.Time `json:"creation_time" structs:"creation_time" mapstructure:"creation_time"`
 
-	// The time in UTC when the UserID becomes eligible for tidy operation.
+	// The time in UTC when the SecretID becomes eligible for tidy operation.
 	// Tidying is performed by the PeriodicFunc of the backend which is 1 minute apart.
 	ExpirationTime time.Time `json:"expiration_time" structs:"expiration_time" mapstructure:"expiration_time"`
 
@@ -50,24 +50,24 @@ type validationResponse struct {
 	Policies      []string      `json:"policies" structs:"policies" mapstructure:"policies"`
 }
 
-// Identifies the supplied selector and validates it, checks if the supplied user ID
+// Identifies the supplied selector and validates it, checks if the supplied secret ID
 // has a corresponding entry in the backend and udpates the use count if needed.
-func (b *backend) validateCredentials(s logical.Storage, selector, userID string) (*validationResponse, error) {
+func (b *backend) validateCredentials(s logical.Storage, selector, secretID string) (*validationResponse, error) {
 	if selector == "" {
 		return nil, fmt.Errorf("missing selector")
 	}
-	if userID == "" {
-		return nil, fmt.Errorf("missing userID")
+	if secretID == "" {
+		return nil, fmt.Errorf("missing secretID")
 	}
 
-	// From the selector field supplied as the credential, detect the type of UserID
-	// supplied. UserID will be verified based on the type.
+	// From the selector field supplied as the credential, detect the type of SecretID
+	// supplied. SecretID will be verified based on the type.
 	selectorType := ""
 	selectorValue := ""
 	switch {
 	case selector == selectorTypeSuperGroup:
 		selectorType = selectorTypeSuperGroup
-		selectorValue = b.salt.SaltID(userID)
+		selectorValue = b.salt.SaltID(secretID)
 	case strings.HasPrefix(selector, "app/") || strings.HasPrefix(selector, "group/"):
 		selectorFields := strings.SplitN(selector, "/", 2)
 		if len(selectorFields) != 2 {
@@ -82,22 +82,22 @@ func (b *backend) validateCredentials(s logical.Storage, selector, userID string
 		return nil, fmt.Errorf("unrecognized selector")
 	}
 
-	// Do the selector validation first. If this results in an error, the UserID
-	// entry should not be modified. Return the validation response if the UserID
-	// is found to be valid and if the UserID entry is updated properly.
+	// Do the selector validation first. If this results in an error, the SecretID
+	// entry should not be modified. Return the validation response if the SecretID
+	// is found to be valid and if the SecretID entry is updated properly.
 	validationResp, err := b.validateSelector(s, selectorType, selectorValue)
 	if err != nil {
 		return nil, err
 	}
 
-	// Check if the user ID supplied is valid. If use limit was specified
-	// on the user ID, it will be decremented in this call.
-	valid, err := b.userIDEntryValid(s, selectorType, selectorValue, userID)
+	// Check if the secret ID supplied is valid. If use limit was specified
+	// on the secret ID, it will be decremented in this call.
+	valid, err := b.secretIDEntryValid(s, selectorType, selectorValue, secretID)
 	if err != nil {
 		return nil, err
 	}
 	if !valid {
-		return nil, fmt.Errorf("user ID not found under the %s selector type", selectorType)
+		return nil, fmt.Errorf("secret ID not found under the %s selector type", selectorType)
 	}
 
 	return validationResp, nil
@@ -116,7 +116,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 			return nil, err
 		}
 		if app == nil {
-			return nil, fmt.Errorf("app referred by the user ID does not exist")
+			return nil, fmt.Errorf("app referred by the secret ID does not exist")
 		}
 		resp.Policies = app.Policies
 		resp.TokenTTL = app.TokenTTL
@@ -127,7 +127,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 			return nil, err
 		}
 		if group == nil {
-			return nil, fmt.Errorf("group referred by the user ID does not exist")
+			return nil, fmt.Errorf("group referred by the secret ID does not exist")
 		}
 		groupPolicies, err := b.fetchPolicies(s, group.Apps)
 		if err != nil {
@@ -147,7 +147,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 			return nil, err
 		}
 		if superGroup == nil {
-			return nil, fmt.Errorf("supergroup credential referred by the user ID does not exist")
+			return nil, fmt.Errorf("supergroup credential referred by the secret ID does not exist")
 		}
 		for _, groupName := range superGroup.Groups {
 			group, err := b.groupEntry(s, groupName)
@@ -194,22 +194,22 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 	return resp, nil
 }
 
-// userIDEntryValid is used to determine if the given user ID is a valid one.
-// The UserID is looked to be present only under the sub-view of the selector.
-// This ensures that the UserIDs that are reused between selector types, the
-// correct one is referred to. If the UserIDs are always generated by the
-// backend, then there will be no collision between the UserIDs from different
-// types. But, if same specific UserIDs are assigned across different selector
+// secretIDEntryValid is used to determine if the given secret ID is a valid one.
+// The SecretID is looked to be present only under the sub-view of the selector.
+// This ensures that the SecretIDs that are reused between selector types, the
+// correct one is referred to. If the SecretIDs are always generated by the
+// backend, then there will be no collision between the SecretIDs from different
+// types. But, if same specific SecretIDs are assigned across different selector
 // types, then it should be supported.
-func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValue, userID string) (bool, error) {
-	// Prepare the storage index for the userID
-	entryIndex := fmt.Sprintf("userid/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(userID)))
-	// Acquire a lock to read/write userID
-	lock := b.getUserIDLock(userID)
+func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorValue, secretID string) (bool, error) {
+	// Prepare the storage index for the secretID
+	entryIndex := fmt.Sprintf("secret_id/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(secretID)))
+	// Acquire a lock to read/write secretID
+	lock := b.getSecretIDLock(secretID)
 
 	lock.RLock()
 
-	result := userIDStorageEntry{}
+	result := secretIDStorageEntry{}
 	if entry, err := s.Get(entryIndex); err != nil {
 		lock.RUnlock()
 		return false, err
@@ -222,7 +222,7 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 	}
 
 	// NumUses will be zero only if the usage limit was not set at all,
-	// in which case, the UserID will remain to be valid as long as it is not
+	// in which case, the SecretID will remain to be valid as long as it is not
 	// expired.
 	if result.NumUses == 0 {
 		lock.RUnlock()
@@ -238,7 +238,7 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 	defer lock.Unlock()
 
 	// Lock switching may change the data. Refresh the contents.
-	result = userIDStorageEntry{}
+	result = secretIDStorageEntry{}
 	if entry, err := s.Get(entryIndex); err != nil {
 		return false, err
 	} else if entry == nil {
@@ -247,16 +247,16 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 		return false, err
 	}
 
-	// If there exists a single use left, delete the UserID entry from
+	// If there exists a single use left, delete the SecretID entry from
 	// the storage but do not fail the validation request. Delete the
-	// UserIDs lock from the map of locks. Subsequest requests to use
-	// the same UserID will fail.
+	// SecretIDs lock from the map of locks. Subsequest requests to use
+	// the same SecretID will fail.
 	if result.NumUses == 1 {
 		if err := s.Delete(entryIndex); err != nil {
 			return false, err
 		}
 		// The storage entry for superGroup type is not created by any endpoints
-		// and it is not cleaned up in any other way. When the UserID belonging
+		// and it is not cleaned up in any other way. When the SecretID belonging
 		// to the superGroup storage entry is getting invalidated, the entry should
 		// be deleted as well.
 		if selectorType == selectorTypeSuperGroup {
@@ -269,44 +269,44 @@ func (b *backend) userIDEntryValid(s logical.Storage, selectorType, selectorValu
 		result.NumUses -= 1
 		result.LastUpdatedTime = time.Now().UTC()
 		if entry, err := logical.StorageEntryJSON(entryIndex, &result); err != nil {
-			return false, fmt.Errorf("failed to decrement the num_uses for user ID:%s", userID)
+			return false, fmt.Errorf("failed to decrement the num_uses for secret ID:%s", secretID)
 		} else if err = s.Put(entry); err != nil {
-			return false, fmt.Errorf("failed to decrement the num_uses for user ID:%s", userID)
+			return false, fmt.Errorf("failed to decrement the num_uses for secret ID:%s", secretID)
 		}
 	}
 
 	return true, nil
 }
 
-func (b *backend) getUserIDLock(userID string) *sync.RWMutex {
+func (b *backend) getSecretIDLock(secretID string) *sync.RWMutex {
 	// Find our multilevel lock, or fall back to global
 	var lock *sync.RWMutex
 	var ok bool
-	if len(userID) >= 2 {
-		lock, ok = b.userIDLocksMap[userID[0:2]]
+	if len(secretID) >= 2 {
+		lock, ok = b.secretIDLocksMap[secretID[0:2]]
 	}
 	if !ok || lock == nil {
-		// Fall back for custom user IDs
-		lock = b.userIDLocksMap["custom"]
+		// Fall back for custom secret IDs
+		lock = b.secretIDLocksMap["custom"]
 	}
 
 	return lock
 }
 
-// registerUserIDEntry creates a new storage entry for the given UserID.
+// registerSecretIDEntry creates a new storage entry for the given SecretID.
 // Successful creation of the storage entry results in the creation of a
 // lock in the map of locks maintained at the backend. The index into the
-// map is the UserID itself. During login, if the UserID supplied is not
+// map is the SecretID itself. During login, if the SecretID supplied is not
 // having a corresponding lock in the map, the login attempt fails.
-func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorValue, userID string, userIDEntry *userIDStorageEntry) error {
+func (b *backend) registerSecretIDEntry(s logical.Storage, selectorType, selectorValue, secretID string, secretIDEntry *secretIDStorageEntry) error {
 
-	// Prepare the storage index for the userID
-	entryIndex := fmt.Sprintf("userid/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(userID)))
+	// Prepare the storage index for the secretID
+	entryIndex := fmt.Sprintf("secret_id/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(secretID)))
 
-	// Acquire a lock to read/write userID
-	lock := b.getUserIDLock(userID)
+	// Acquire a lock to read/write secretID
+	lock := b.getSecretIDLock(secretID)
 
-	// See if there is already an entry for the given UserID
+	// See if there is already an entry for the given SecretID
 	lock.RLock()
 	entry, err := s.Get(entryIndex)
 	if err != nil {
@@ -315,12 +315,12 @@ func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorV
 	}
 	if entry != nil {
 		lock.RUnlock()
-		return fmt.Errorf("user ID is already registered")
+		return fmt.Errorf("secret ID is already registered")
 	}
 
-	// If there isn't an entry for the userID already, switch the read lock
+	// If there isn't an entry for the secretID already, switch the read lock
 	// with a write lock and create an entry. But before saving a new entry,
-	// check if the userID entry was created during the lock switch.
+	// check if the secretID entry was created during the lock switch.
 	lock.RUnlock()
 	lock.Lock()
 	defer lock.Unlock()
@@ -330,28 +330,28 @@ func (b *backend) registerUserIDEntry(s logical.Storage, selectorType, selectorV
 		return err
 	}
 	if entry != nil {
-		return fmt.Errorf("user ID is already registered")
+		return fmt.Errorf("secret ID is already registered")
 	}
 
-	// UserID was not created during the lock switch. Create a new entry.
+	// SecretID was not created during the lock switch. Create a new entry.
 
-	// Set the creation time for the UserID
+	// Set the creation time for the SecretID
 	currentTime := time.Now().UTC()
-	userIDEntry.CreationTime = currentTime
-	userIDEntry.LastUpdatedTime = currentTime
+	secretIDEntry.CreationTime = currentTime
+	secretIDEntry.LastUpdatedTime = currentTime
 
-	// If UserIDTTL is not specified or if it crosses the backend mount's limit,
+	// If SecretIDTTL is not specified or if it crosses the backend mount's limit,
 	// cap the expiration to backend's max. Otherwise, use it to determine the
 	// expiration time.
-	if userIDEntry.UserIDTTL < time.Duration(0) || userIDEntry.UserIDTTL > b.System().MaxLeaseTTL() {
-		userIDEntry.ExpirationTime = currentTime.Add(b.System().MaxLeaseTTL())
-	} else if userIDEntry.UserIDTTL != time.Duration(0) {
-		// Set the ExpirationTime only if UserIDTTL was set. UserIDs should not
+	if secretIDEntry.SecretIDTTL < time.Duration(0) || secretIDEntry.SecretIDTTL > b.System().MaxLeaseTTL() {
+		secretIDEntry.ExpirationTime = currentTime.Add(b.System().MaxLeaseTTL())
+	} else if secretIDEntry.SecretIDTTL != time.Duration(0) {
+		// Set the ExpirationTime only if SecretIDTTL was set. SecretIDs should not
 		// expire by default.
-		userIDEntry.ExpirationTime = currentTime.Add(userIDEntry.UserIDTTL)
+		secretIDEntry.ExpirationTime = currentTime.Add(secretIDEntry.SecretIDTTL)
 	}
 
-	if entry, err := logical.StorageEntryJSON(entryIndex, userIDEntry); err != nil {
+	if entry, err := logical.StorageEntryJSON(entryIndex, secretIDEntry); err != nil {
 		return err
 	} else if err = s.Put(entry); err != nil {
 		return err

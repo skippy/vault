@@ -11,70 +11,70 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-func pathTidyUserID(b *backend) *framework.Path {
+func pathTidySecretID(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "tidy/user-id$",
+		Pattern: "tidy/secret-id$",
 
 		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.UpdateOperation: b.pathTidyUserIDUpdate,
+			logical.UpdateOperation: b.pathTidySecretIDUpdate,
 		},
 
-		HelpSynopsis:    pathTidyUserIDSyn,
-		HelpDescription: pathTidyUserIDDesc,
+		HelpSynopsis:    pathTidySecretIDSyn,
+		HelpDescription: pathTidySecretIDDesc,
 	}
 }
 
-// tidyUserID is used to delete entries in the whitelist that are expired.
-func (b *backend) tidyUserID(s logical.Storage) error {
-	grabbed := atomic.CompareAndSwapUint32(&b.tidyUserIDCASGuard, 0, 1)
+// tidySecretID is used to delete entries in the whitelist that are expired.
+func (b *backend) tidySecretID(s logical.Storage) error {
+	grabbed := atomic.CompareAndSwapUint32(&b.tidySecretIDCASGuard, 0, 1)
 	if grabbed {
-		defer atomic.StoreUint32(&b.tidyUserIDCASGuard, 0)
+		defer atomic.StoreUint32(&b.tidySecretIDCASGuard, 0)
 	} else {
-		return fmt.Errorf("user ID tidy operation already running")
+		return fmt.Errorf("secret ID tidy operation already running")
 	}
 
-	userIDs, err := s.List("userid/")
+	secretIDs, err := s.List("secret_id/")
 	if err != nil {
 		return err
 	}
 
 	var result error
-	for _, userID := range userIDs {
-		userIDEntry, err := s.Get("userid/" + userID)
+	for _, secretID := range secretIDs {
+		secretIDEntry, err := s.Get("secret_id/" + secretID)
 		if err != nil {
-			return fmt.Errorf("error fetching user ID %s: %s", userID, err)
+			return fmt.Errorf("error fetching secret ID %s: %s", secretID, err)
 		}
 
-		if userIDEntry == nil {
-			result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for user ID %s is nil", userID)))
+		if secretIDEntry == nil {
+			result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for secret ID %s is nil", secretID)))
 		}
 
-		if userIDEntry.Value == nil || len(userIDEntry.Value) == 0 {
-			return fmt.Errorf("found entry for user ID %s but actual user ID is empty", userID)
+		if secretIDEntry.Value == nil || len(secretIDEntry.Value) == 0 {
+			return fmt.Errorf("found entry for secret ID %s but actual secret ID is empty", secretID)
 		}
 
-		var result userIDStorageEntry
-		if err := userIDEntry.DecodeJSON(&result); err != nil {
+		var result secretIDStorageEntry
+		if err := secretIDEntry.DecodeJSON(&result); err != nil {
 			return err
 		}
 
-		// Unset ExpirationTime indicates non-expiring UserIDs
+		// Unset ExpirationTime indicates non-expiring SecretIDs
 		if !result.ExpirationTime.IsZero() && time.Now().UTC().After(result.ExpirationTime) {
-			if err := s.Delete("userid/" + userID); err != nil {
-				return fmt.Errorf("error deleting user ID %s from storage: %s", userID, err)
+			if err := s.Delete("secret_id/" + secretID); err != nil {
+				return fmt.Errorf("error deleting secret ID %s from storage: %s", secretID, err)
 			}
 		}
 	}
 	return result
 }
 
-// pathTidyUserIDUpdate is used to delete the expired UserID entries
-func (b *backend) pathTidyUserIDUpdate(
+// pathTidySecretIDUpdate is used to delete the expired SecretID entries
+func (b *backend) pathTidySecretIDUpdate(
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return nil, b.tidyUserID(req.Storage)
+	return nil, b.tidySecretID(req.Storage)
 }
 
-const pathTidyUserIDSyn = "Trigger the clean-up of expired UserID entries."
-const pathTidyUserIDDesc = `UserIDs will have expiratin time attached to them. The periodic function
+const pathTidySecretIDSyn = "Trigger the clean-up of expired SecretID entries."
+const pathTidySecretIDDesc = `SecretIDs will have expiratin time attached to them. The periodic function
 of the backend will look for expired entries and delete them. This happens once in a minute. Invoking
 this endpoint will trigger the clean-up action, without waiting for the backend's periodic function.`

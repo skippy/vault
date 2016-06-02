@@ -15,7 +15,7 @@ func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, a
 		"apps":                apps,
 		"additional_policies": additionalPolicies,
 		"num_uses":            10,
-		"userid_ttl":          300,
+		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
 	}
@@ -40,7 +40,7 @@ func TestBackend_group_creds(t *testing.T) {
 	appData := map[string]interface{}{
 		"policies":      "p,q,r,s",
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -60,7 +60,7 @@ func TestBackend_group_creds(t *testing.T) {
 		"apps":                "app1",
 		"additional_policies": "t,u,v,w",
 		"num_uses":            11,
-		"userid_ttl":          301,
+		"secret_id_ttl":       301,
 		"token_ttl":           401,
 		"token_max_ttl":       501,
 	}
@@ -87,13 +87,13 @@ func TestBackend_group_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"].(string) == "" {
-		t.Fatalf("failed to generate user_id")
+	if resp.Data["secret_id"].(string) == "" {
+		t.Fatalf("failed to generate secret_id")
 	}
 
 	groupCredsReq.Path = "group/group1/creds-specific"
 	groupCredsSpecificData := map[string]interface{}{
-		"user_id": "abcd123",
+		"secret_id": "abcd123",
 	}
 	groupCredsReq.Data = groupCredsSpecificData
 	groupCredsReq.Operation = logical.UpdateOperation
@@ -102,8 +102,8 @@ func TestBackend_group_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"] != "abcd123" {
-		t.Fatalf("failed to set specific user_id to group")
+	if resp.Data["secret_id"] != "abcd123" {
+		t.Fatalf("failed to set specific secret_id to group")
 	}
 }
 func TestBackend_group_CRUD(t *testing.T) {
@@ -115,7 +115,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		"apps":                "app1,app2",
 		"additional_policies": "p,q,r,s",
 		"num_uses":            10,
-		"userid_ttl":          300,
+		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
 	}
@@ -141,7 +141,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		"apps":                []string{"app1", "app2"},
 		"additional_policies": []string{"default", "p", "q", "r", "s"},
 		"num_uses":            10,
-		"userid_ttl":          300,
+		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
 	}
@@ -165,7 +165,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		"apps":                "app11,app21",
 		"additional_policies": "a,b,c,d",
 		"num_uses":            100,
-		"userid_ttl":          3000,
+		"secret_id_ttl":       3000,
 		"token_ttl":           4000,
 		"token_max_ttl":       5000,
 	}
@@ -187,7 +187,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		"apps":                []string{"app11", "app21"},
 		"additional_policies": []string{"a", "b", "c", "d", "default"},
 		"num_uses":            100,
-		"userid_ttl":          3000,
+		"secret_id_ttl":       3000,
 		"token_ttl":           4000,
 		"token_max_ttl":       5000,
 	}
@@ -325,15 +325,15 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("expected value to be reset")
 	}
 
-	// RUD for userid_ttl field
-	groupReq.Path = "group/group1/userid-ttl"
+	// RUD for secret_id_ttl field
+	groupReq.Path = "group/group1/secret_id-ttl"
 	groupReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(groupReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	groupReq.Data = map[string]interface{}{"userid_ttl": 3001}
+	groupReq.Data = map[string]interface{}{"secret_id_ttl": 3001}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -346,8 +346,8 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["userid_ttl"].(time.Duration) != 3001 {
-		t.Fatalf("bad: userid_ttl: expected:3001 actual:%d\n", resp.Data["userid_ttl"].(time.Duration))
+	if resp.Data["secret_id_ttl"].(time.Duration) != 3001 {
+		t.Fatalf("bad: secret_id_ttl: expected:3001 actual:%d\n", resp.Data["secret_id_ttl"].(time.Duration))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
@@ -361,7 +361,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["userid_ttl"].(time.Duration) != 0 {
+	if resp.Data["secret_id_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
 

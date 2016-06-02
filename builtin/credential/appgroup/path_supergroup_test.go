@@ -14,7 +14,7 @@ func TestBackend_supergroup_creds(t *testing.T) {
 	appData := map[string]interface{}{
 		"policies":      "p,q,r,s",
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -34,7 +34,7 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		"apps":                "app1",
 		"additional_policies": "t,u,v,w",
 		"num_uses":            11,
-		"userid_ttl":          301,
+		"secret_id_ttl":       301,
 		"token_ttl":           401,
 		"token_max_ttl":       501,
 	}
@@ -56,7 +56,7 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		"apps":                "app1",
 		"additional_policies": "x,y,z",
 		"num_uses":            122,
-		"userid_ttl":          302,
+		"secret_id_ttl":       302,
 		"token_ttl":           402,
 		"token_max_ttl":       502,
 	}
@@ -72,18 +72,18 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"].(string) == "" {
-		t.Fatalf("failed to generate user_id")
+	if resp.Data["secret_id"].(string) == "" {
+		t.Fatalf("failed to generate secret_id")
 	}
 
 	superGroupCredsReq.Path = "supergroup/creds-specific"
-	superGroupData["user_id"] = "abcd123"
+	superGroupData["secret_id"] = "abcd123"
 	resp, err = b.HandleRequest(superGroupCredsReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"] != "abcd123" {
-		t.Fatalf("failed to set specific user_id to supergroup")
+	if resp.Data["secret_id"] != "abcd123" {
+		t.Fatalf("failed to set specific secret_id to supergroup")
 	}
 }

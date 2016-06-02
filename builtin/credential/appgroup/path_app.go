@@ -17,11 +17,11 @@ type appStorageEntry struct {
 	// Policies that are to be required by the token to access the App
 	Policies []string `json:"policies" structs:"policies" mapstructure:"policies"`
 
-	// Number of times the UserID generated against the App can be used to perform login
+	// Number of times the SecretID generated against the App can be used to perform login
 	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
 
-	// Duration (less than the backend mount's max TTL) after which a UserID generated against the App will expire
-	UserIDTTL time.Duration `json:"userid_ttl" structs:"userid_ttl" mapstructure:"userid_ttl"`
+	// Duration (less than the backend mount's max TTL) after which a SecretID generated against the App will expire
+	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
 
 	// Duration before which an issued token must be renewed
 	TokenTTL time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
@@ -37,7 +37,7 @@ type appStorageEntry struct {
 // app/<app_name>
 // app/policies
 // app/num-uses
-// app/userid-ttl
+// app/secret-id-ttl
 // app/token-ttl
 // app/token-max-ttl
 // app/<app_name>/creds
@@ -66,11 +66,11 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a UserID can access the App, after which it will expire.",
+					Description: "Number of times the a SecretID can access the App, after which it will expire.",
 				},
-				"userid_ttl": &framework.FieldSchema{
+				"secret_id_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
-					Description: "Duration in seconds after which the issued UserID should expire.",
+					Description: "Duration in seconds after which the issued SecretID should expire.",
 				},
 				"token_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
@@ -119,7 +119,7 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a UserID can access the App, after which it will expire.",
+					Description: "Number of times the a SecretID can access the App, after which it will expire.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -131,24 +131,24 @@ func appPaths(b *backend) []*framework.Path {
 			HelpDescription: strings.TrimSpace(appHelp["app-num-uses"][1]),
 		},
 		&framework.Path{
-			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/userid-ttl$",
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id-ttl$",
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
 				},
-				"userid_ttl": &framework.FieldSchema{
+				"secret_id_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
-					Description: "Duration in seconds after which the issued UserID should expire.",
+					Description: "Duration in seconds after which the issued SecretID should expire.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathAppUserIDTTLUpdate,
-				logical.ReadOperation:   b.pathAppUserIDTTLRead,
-				logical.DeleteOperation: b.pathAppUserIDTTLDelete,
+				logical.UpdateOperation: b.pathAppSecretIDTTLUpdate,
+				logical.ReadOperation:   b.pathAppSecretIDTTLRead,
+				logical.DeleteOperation: b.pathAppSecretIDTTLDelete,
 			},
-			HelpSynopsis:    strings.TrimSpace(appHelp["app-userid-ttl"][0]),
-			HelpDescription: strings.TrimSpace(appHelp["app-userid-ttl"][1]),
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id-ttl"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-ttl"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/token-ttl$",
@@ -211,10 +211,10 @@ func appPaths(b *backend) []*framework.Path {
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
 				},
-				"user_id": &framework.FieldSchema{
+				"secret_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Default:     "",
-					Description: "UserID to be attached to the App.",
+					Description: "SecretID to be attached to the App.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -305,10 +305,10 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		return logical.ErrorResponse("num_uses cannot be negative"), nil
 	}
 
-	if userIDTTLRaw, ok := data.GetOk("userid_ttl"); ok {
-		app.UserIDTTL = time.Second * time.Duration(userIDTTLRaw.(int))
+	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
+		app.SecretIDTTL = time.Second * time.Duration(secretIDTTLRaw.(int))
 	} else if req.Operation == logical.CreateOperation {
-		app.UserIDTTL = time.Second * time.Duration(data.Get("userid_ttl").(int))
+		app.SecretIDTTL = time.Second * time.Duration(data.Get("secret_id_ttl").(int))
 	}
 
 	if tokenTTLRaw, ok := data.GetOk("token_ttl"); ok {
@@ -353,7 +353,7 @@ func (b *backend) pathAppRead(req *logical.Request, data *framework.FieldData) (
 		return nil, nil
 	} else {
 		// Convert the 'time.Duration' values to second.
-		app.UserIDTTL = app.UserIDTTL / time.Second
+		app.SecretIDTTL = app.SecretIDTTL / time.Second
 		app.TokenTTL = app.TokenTTL / time.Second
 		app.TokenMaxTTL = app.TokenMaxTTL / time.Second
 
@@ -500,7 +500,7 @@ func (b *backend) pathAppNumUsesDelete(req *logical.Request, data *framework.Fie
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
-func (b *backend) pathAppUserIDTTLUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDTTLUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -514,15 +514,15 @@ func (b *backend) pathAppUserIDTTLUpdate(req *logical.Request, data *framework.F
 		return nil, nil
 	}
 
-	if userIDTTLRaw, ok := data.GetOk("userid_ttl"); ok {
-		app.UserIDTTL = time.Second * time.Duration(userIDTTLRaw.(int))
+	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
+		app.SecretIDTTL = time.Second * time.Duration(secretIDTTLRaw.(int))
 		return nil, b.setAppEntry(req.Storage, appName, app)
 	} else {
-		return logical.ErrorResponse("missing userid_ttl"), nil
+		return logical.ErrorResponse("missing secret_id_ttl"), nil
 	}
 }
 
-func (b *backend) pathAppUserIDTTLRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDTTLRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -533,16 +533,16 @@ func (b *backend) pathAppUserIDTTLRead(req *logical.Request, data *framework.Fie
 	} else if app == nil {
 		return nil, nil
 	} else {
-		app.UserIDTTL = app.UserIDTTL / time.Second
+		app.SecretIDTTL = app.SecretIDTTL / time.Second
 		return &logical.Response{
 			Data: map[string]interface{}{
-				"userid_ttl": app.UserIDTTL,
+				"secret_id_ttl": app.SecretIDTTL,
 			},
 		}, nil
 	}
 }
 
-func (b *backend) pathAppUserIDTTLDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDTTLDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -557,7 +557,7 @@ func (b *backend) pathAppUserIDTTLDelete(req *logical.Request, data *framework.F
 	}
 
 	// Deleting a field means resetting the value in the entry.
-	app.UserIDTTL = (&appStorageEntry{}).UserIDTTL
+	app.SecretIDTTL = (&appStorageEntry{}).SecretIDTTL
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -693,25 +693,25 @@ func (b *backend) pathAppTokenMaxTTLDelete(req *logical.Request, data *framework
 }
 
 func (b *backend) pathAppCredsRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	userID, err := uuid.GenerateUUID()
+	secretID, err := uuid.GenerateUUID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate UserID:%s", err)
+		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
 	}
-	return b.handleAppCredsCommon(req, data, userID)
+	return b.handleAppCredsCommon(req, data, secretID)
 }
 
 func (b *backend) pathAppCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleAppCredsCommon(req, data, data.Get("user_id").(string))
+	return b.handleAppCredsCommon(req, data, data.Get("secret_id").(string))
 }
 
-func (b *backend) handleAppCredsCommon(req *logical.Request, data *framework.FieldData, userID string) (*logical.Response, error) {
+func (b *backend) handleAppCredsCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
 	}
 
-	if userID == "" {
-		return logical.ErrorResponse("missing user_id"), nil
+	if secretID == "" {
+		return logical.ErrorResponse("missing secret_id"), nil
 	}
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
@@ -722,17 +722,17 @@ func (b *backend) handleAppCredsCommon(req *logical.Request, data *framework.Fie
 		return logical.ErrorResponse(fmt.Sprintf("app %s does not exist", appName)), nil
 	}
 
-	if err = b.registerUserIDEntry(req.Storage, selectorTypeApp, appName, userID, &userIDStorageEntry{
-		NumUses:   app.NumUses,
-		UserIDTTL: app.UserIDTTL,
+	if err = b.registerSecretIDEntry(req.Storage, selectorTypeApp, appName, secretID, &secretIDStorageEntry{
+		NumUses:     app.NumUses,
+		SecretIDTTL: app.SecretIDTTL,
 	}); err != nil {
-		return nil, fmt.Errorf("failed to store user ID: %s", err)
+		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"user_id":  userID,
-			"selector": "app/" + appName,
+			"secret_id": secretID,
+			"selector":  "app/" + appName,
 		},
 	}, nil
 }
@@ -747,11 +747,11 @@ var appHelp = map[string][2]string{
 		`An App can represent a service, a machine or anything that can be IDed.
 The set of policies on the App defines access to the App, meaning, any
 Vault token with a policy set that is a superset of the policies on the
-App registered here will have access to the App. If a UserID is desired
+App registered here will have access to the App. If a SecretID is desired
 to be generated against only this specific App, it can be done via
 'app/<app_name>/creds' and 'app/<app_name>/creds-specific' endpoints.
-The properties of the UserID created against the App and the properties
-of the token issued with the UserID generated againt the App, can be
+The properties of the SecretID created against the App and the properties
+of the token issued with the SecretID generated againt the App, can be
 configured using the parameters of this endpoint.`,
 	},
 	"app-policies": {
@@ -761,52 +761,52 @@ All the Vault tokens with policies that encompass the policy set
 defined on the App, can access the App.`,
 	},
 	"app-num-uses": {
-		"Use limit of the UserID generated against the App.",
-		`If the UserIDs are generated/assigned against the App using the
+		"Use limit of the SecretID generated against the App.",
+		`If the SecretIDs are generated/assigned against the App using the
 'app/<app_name>/creds' or 'app/<app_name>/creds-specific' endpoints,
-then the number of times that UserID can access the App is defined by
+then the number of times that SecretID can access the App is defined by
 this option.`,
 	},
-	"app-userid-ttl": {
-		`Duration in seconds, representing the lifetime of the UserIDs
+	"app-secret-id-ttl": {
+		`Duration in seconds, representing the lifetime of the SecretIDs
 that are generated against the App using 'app/<app_name>/creds' or
 'app/<app_name>/creds-specific' endpoints.`,
 		``,
 	},
 	"app-token-ttl": {
-		`Duration in seconds, the lifetime of the token issued by using the UserID that
+		`Duration in seconds, the lifetime of the token issued by using the SecretID that
 is generated against this App, before which the token needs to be renewed.`,
-		`If UserIDs are generated against the App, using 'app/<app_name>/creds' or the
-'app/<app_name>/creds-specific' endpoints, and if those UserIDs are used
+		`If SecretIDs are generated against the App, using 'app/<app_name>/creds' or the
+'app/<app_name>/creds-specific' endpoints, and if those SecretIDs are used
 to perform the login operation, then the value of 'token-ttl' defines the
 lifetime of the token issued, before which the token needs to be renewed.`,
 	},
 	"app-token-max-ttl": {
 		`Duration in seconds, the maximum lifetime of the tokens issued by using
-the UserIDs that were generated against this App, after which the
+the SecretIDs that were generated against this App, after which the
 tokens are not allowed to be renewed.`,
-		`If UserIDs are generated against the App using 'app/<app_name>/creds'
-or the 'app/<app_name>/creds-specific' endpoints, and if those UserIDs
+		`If SecretIDs are generated against the App using 'app/<app_name>/creds'
+or the 'app/<app_name>/creds-specific' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximum TTL value.`,
 	},
 	"app-creds": {
-		"Generate a UserID against this App.",
-		`The UserID generated using this endpoint will be scoped to access
-just this App and none else. The properties of this UserID will be
+		"Generate a SecretID against this App.",
+		`The SecretID generated using this endpoint will be scoped to access
+just this App and none else. The properties of this SecretID will be
 based on the options set on the App. It will expire after a period
-defined by the 'userid_ttl' option on the App and/or the backend
+defined by the 'secret_id_ttl' option on the App and/or the backend
 mount's maximum TTL value.`,
 	},
 	"app-creds-specific": {
-		"Assign a UserID of choice against the App.",
+		"Assign a SecretID of choice against the App.",
 		`This option is not recommended unless there is a specific need
-to do so. This will assign a client supplied UserID to be used to access
-the App. This UserID will behave similarly to the UserIDs generated by
-the backend. The properties of this UserID will be based on the options
-set on the App. It will expire after a period defined by the 'userid_ttl'
+to do so. This will assign a client supplied SecretID to be used to access
+the App. This SecretID will behave similarly to the SecretIDs generated by
+the backend. The properties of this SecretID will be based on the options
+set on the App. It will expire after a period defined by the 'secret_id_ttl'
 option on the App and/or the backend mount's maximum TTL value.`,
 	},
 }

@@ -14,7 +14,7 @@ func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies st
 	appData := map[string]interface{}{
 		"policies":      policies,
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -39,7 +39,7 @@ func TestBackend_app_creds(t *testing.T) {
 	appData := map[string]interface{}{
 		"policies":      "p,q,r,s",
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -65,13 +65,13 @@ func TestBackend_app_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"].(string) == "" {
-		t.Fatalf("failed to generate user_id")
+	if resp.Data["secret_id"].(string) == "" {
+		t.Fatalf("failed to generate secret_id")
 	}
 
 	appCredsReq.Path = "app/app1/creds-specific"
 	appCredsSpecificData := map[string]interface{}{
-		"user_id": "abcd123",
+		"secret_id": "abcd123",
 	}
 	appCredsReq.Data = appCredsSpecificData
 	appCredsReq.Operation = logical.UpdateOperation
@@ -80,8 +80,8 @@ func TestBackend_app_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["user_id"] != "abcd123" {
-		t.Fatalf("failed to set specific user_id to app")
+	if resp.Data["secret_id"] != "abcd123" {
+		t.Fatalf("failed to set specific secret_id to app")
 	}
 }
 
@@ -93,7 +93,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appData := map[string]interface{}{
 		"policies":      "p,q,r,s",
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -118,7 +118,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	expected := map[string]interface{}{
 		"policies":      []string{"default", "p", "q", "r", "s"},
 		"num_uses":      10,
-		"userid_ttl":    300,
+		"secret_id_ttl": 300,
 		"token_ttl":     400,
 		"token_max_ttl": 500,
 	}
@@ -141,7 +141,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	appData = map[string]interface{}{
 		"policies":      "a,b,c,d",
 		"num_uses":      100,
-		"userid_ttl":    3000,
+		"secret_id_ttl": 3000,
 		"token_ttl":     4000,
 		"token_max_ttl": 5000,
 	}
@@ -162,7 +162,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	expected = map[string]interface{}{
 		"policies":      []string{"a", "b", "c", "d", "default"},
 		"num_uses":      100,
-		"userid_ttl":    3000,
+		"secret_id_ttl": 3000,
 		"token_ttl":     4000,
 		"token_max_ttl": 5000,
 	}
@@ -260,15 +260,15 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("expected value to be reset")
 	}
 
-	// RUD for userid_ttl field
-	appReq.Path = "app/app1/userid-ttl"
+	// RUD for secret_id_ttl field
+	appReq.Path = "app/app1/secret-id-ttl"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"userid_ttl": 3001}
+	appReq.Data = map[string]interface{}{"secret_id_ttl": 3001}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -281,8 +281,8 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["userid_ttl"].(time.Duration) != 3001 {
-		t.Fatalf("bad: userid_ttl: expected:3001 actual:%d\n", resp.Data["userid_ttl"].(time.Duration))
+	if resp.Data["secret_id_ttl"].(time.Duration) != 3001 {
+		t.Fatalf("bad: secret_id_ttl: expected:3001 actual:%d\n", resp.Data["secret_id_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
@@ -296,7 +296,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["userid_ttl"].(time.Duration) != 0 {
+	if resp.Data["secret_id_ttl"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
 
