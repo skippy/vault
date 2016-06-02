@@ -14,6 +14,9 @@ import (
 
 // appStorageEntry stores all the options that are set on an App
 type appStorageEntry struct {
+	// UUID that uniquely represents this App
+	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+
 	// Policies that are to be required by the token to access the App
 	Policies []string `json:"policies" structs:"policies" mapstructure:"policies"`
 
@@ -326,7 +329,13 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 	}
 	// Create a new entry object if this is a CreateOperation
 	if app == nil {
-		app = &appStorageEntry{}
+		selectorID, err := uuid.GenerateUUID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+		}
+		app = &appStorageEntry{
+			SelectorID: selectorID,
+		}
 	}
 
 	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
@@ -402,8 +411,12 @@ func (b *backend) pathAppRead(req *logical.Request, data *framework.FieldData) (
 		app.TokenTTL = app.TokenTTL / time.Second
 		app.TokenMaxTTL = app.TokenMaxTTL / time.Second
 
+		// Create a map of data to be returned and remove sensitive information from it
+		data := structs.New(app).Map()
+		delete(data, "selector_id")
+
 		return &logical.Response{
-			Data: structs.New(app).Map(),
+			Data: data,
 		}, nil
 	}
 }

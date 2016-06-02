@@ -15,6 +15,9 @@ import (
 
 // groupStorageEntry stores all the options that are set on a Group
 type groupStorageEntry struct {
+	// UUID that uniquely represents this Group
+	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+
 	// All the participating Apps of the Group
 	Apps []string `json:"apps" structs:"apps" mapstructure:"apps"`
 
@@ -363,7 +366,13 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		return nil, err
 	}
 	if group == nil {
-		group = &groupStorageEntry{}
+		selectorID, err := uuid.GenerateUUID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+		}
+		group = &groupStorageEntry{
+			SelectorID: selectorID,
+		}
 	}
 
 	if appsRaw, ok := data.GetOk("apps"); ok {
@@ -437,8 +446,12 @@ func (b *backend) pathGroupRead(req *logical.Request, data *framework.FieldData)
 		group.TokenTTL = group.TokenTTL / time.Second
 		group.TokenMaxTTL = group.TokenMaxTTL / time.Second
 
+		// Create a map of data to be returned and remove sensitive information from it
+		data := structs.New(group).Map()
+		delete(data, "selector_id")
+
 		return &logical.Response{
-			Data: structs.New(group).Map(),
+			Data: data,
 		}, nil
 	}
 }
