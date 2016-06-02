@@ -6,7 +6,7 @@ import (
 	"github.com/hashicorp/vault/logical"
 )
 
-func TestBackend_supergroup_creds(t *testing.T) {
+func TestBackend_supergroup_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
@@ -61,13 +61,13 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		"token_max_ttl":       502,
 	}
 
-	superGroupCredsReq := &logical.Request{
+	superGroupSecretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "supergroup/creds",
+		Path:      "supergroup/secret-id",
 		Storage:   storage,
 		Data:      superGroupData,
 	}
-	resp, err = b.HandleRequest(superGroupCredsReq)
+	resp, err = b.HandleRequest(superGroupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -76,9 +76,9 @@ func TestBackend_supergroup_creds(t *testing.T) {
 		t.Fatalf("failed to generate secret_id")
 	}
 
-	superGroupCredsReq.Path = "supergroup/creds-specific"
+	superGroupSecretIDReq.Path = "supergroup/custom-secret-id"
 	superGroupData["secret_id"] = "abcd123"
-	resp, err = b.HandleRequest(superGroupCredsReq)
+	resp, err = b.HandleRequest(superGroupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}

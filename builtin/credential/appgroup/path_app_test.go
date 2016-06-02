@@ -31,7 +31,7 @@ func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies st
 	}
 }
 
-func TestBackend_app_creds(t *testing.T) {
+func TestBackend_app_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
@@ -55,12 +55,12 @@ func TestBackend_app_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appCredsReq := &logical.Request{
+	appSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
-		Path:      "app/app1/creds",
+		Path:      "app/app1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(appCredsReq)
+	resp, err = b.HandleRequest(appSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -69,13 +69,13 @@ func TestBackend_app_creds(t *testing.T) {
 		t.Fatalf("failed to generate secret_id")
 	}
 
-	appCredsReq.Path = "app/app1/creds-specific"
-	appCredsSpecificData := map[string]interface{}{
+	appSecretIDReq.Path = "app/app1/custom-secret-id"
+	appCustomSecretIDData := map[string]interface{}{
 		"secret_id": "abcd123",
 	}
-	appCredsReq.Data = appCredsSpecificData
-	appCredsReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appCredsReq)
+	appSecretIDReq.Data = appCustomSecretIDData
+	appSecretIDReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(appSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -178,6 +178,46 @@ func TestBackend_app_CRUD(t *testing.T) {
 
 	if !reflect.DeepEqual(expectedStruct, actualStruct) {
 		log.Printf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
+	}
+
+	// RUD for bind_secret_id field
+	appReq.Path = "app/app1/bind-secret-id"
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Data = map[string]interface{}{"bind_secret_id": false}
+	appReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["bind_secret_id"].(bool) {
+		t.Fatalf("bad: bind_secret_id: expected:false actual:%t\n", resp.Data["bind_secret_id"].(bool))
+	}
+	appReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["bind_secret_id"].(bool) {
+		t.Fatalf("expected value to be reset")
 	}
 
 	// RUD for policiess field

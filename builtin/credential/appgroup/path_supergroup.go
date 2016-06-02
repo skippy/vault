@@ -33,6 +33,9 @@ type superGroupStorageEntry struct {
 	// Duration after which an issued token should not be allowed to be renewed
 	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
 
+	// A constraint to require 'secret_id' credential during login
+	BindSecretID bool `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
+
 	// Along with the combined set of Apps' and Groups' policies, the policies in this
 	// list will be added to capabilities of the token issued, when a SecretID generated
 	// in superGroup mode is used perform the login.
@@ -42,12 +45,12 @@ type superGroupStorageEntry struct {
 // superGroupPaths creates the paths that are used to create SecretIDs in superGroup mode
 //
 // Paths returned:
-// supergroup/creds
-// supergroup/creds-specific
+// supergroup/secret-id
+// supergroup/custom-secret-id
 func superGroupPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
-			Pattern: "supergroup/creds$",
+			Pattern: "supergroup/secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"groups": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -58,6 +61,11 @@ func superGroupPaths(b *backend) []*framework.Path {
 					Type:        framework.TypeString,
 					Default:     "",
 					Description: "Comma separated list of Apps.",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Default:     true,
+					Description: "Impose secret_id to be presented during login using this supergroup.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
@@ -86,13 +94,13 @@ addition to those, a set of policies can be assigned using this.
 			},
 
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathSuperGroupCredsUpdate,
+				logical.UpdateOperation: b.pathSuperGroupSecretIDUpdate,
 			},
-			HelpSynopsis:    pathSuperGroupCredsHelpSys,
-			HelpDescription: pathSuperGroupCredsHelpDesc,
+			HelpSynopsis:    pathSuperGroupSecretIDHelpSys,
+			HelpDescription: pathSuperGroupSecretIDHelpDesc,
 		},
 		&framework.Path{
-			Pattern: "supergroup/creds-specific$",
+			Pattern: "supergroup/custom-secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"secret_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -105,6 +113,11 @@ addition to those, a set of policies can be assigned using this.
 				"apps": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Comma separated list of Apps.",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Default:     true,
+					Description: "Impose secret_id to be presented during login using this supergroup.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type: framework.TypeString,
@@ -131,10 +144,10 @@ addition to those, a set of policies can be assigned using this.
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathSuperGroupCredsSpecificUpdate,
+				logical.UpdateOperation: b.pathSuperGroupCustomSecretIDUpdate,
 			},
-			HelpSynopsis:    pathSuperGroupCredsSpecificHelpSys,
-			HelpDescription: pathSuperGroupCredsSpecificHelpDesc,
+			HelpSynopsis:    pathSuperGroupCustomSecretIDHelpSys,
+			HelpDescription: pathSuperGroupCustomSecretIDHelpDesc,
 		},
 	}
 }
@@ -180,22 +193,23 @@ func (b *backend) superGroupEntry(s logical.Storage, superGroupName string) (*su
 	return &result, nil
 }
 
-func (b *backend) pathSuperGroupCredsUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathSuperGroupSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
 	}
-	return b.handleSuperGroupCredsCommon(req, data, secretID)
+	return b.handleSuperGroupSecretIDCommon(req, data, secretID)
 }
 
-func (b *backend) pathSuperGroupCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleSuperGroupCredsCommon(req, data, data.Get("secret_id").(string))
+func (b *backend) pathSuperGroupCustomSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	return b.handleSuperGroupSecretIDCommon(req, data, data.Get("secret_id").(string))
 }
 
-func (b *backend) handleSuperGroupCredsCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
+func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
 	superGroup := &superGroupStorageEntry{
 		Groups:             strutil.ParseStrings(data.Get("groups").(string)),
 		Apps:               strutil.ParseStrings(data.Get("apps").(string)),
+		BindSecretID:       data.Get("bind_secret_id").(bool),
 		AdditionalPolicies: policyutil.ParsePolicies(data.Get("additional_policies").(string)),
 		NumUses:            data.Get("num_uses").(int),
 		SecretIDTTL:        time.Second * time.Duration(data.Get("secret_id_ttl").(int)),
@@ -241,10 +255,10 @@ func (b *backend) handleSuperGroupCredsCommon(req *logical.Request, data *framew
 	}, nil
 }
 
-const pathSuperGroupCredsSpecificHelpSys = `Assign a SecretID of choice against any combination of
+const pathSuperGroupCustomSecretIDHelpSys = `Assign a SecretID of choice against any combination of
 registered App(s) and/or Group(s), with custom options.`
 
-const pathSuperGroupCredsSpecificHelpDesc = `This option is not recommended unless there is a specific
+const pathSuperGroupCustomSecretIDHelpDesc = `This option is not recommended unless there is a specific
 need to do so. This will assign a client supplied SecretID to be used to
 access all the specified Apps and all the participating Apps of all the
 specified Groups. The options on this endpoint will supercede all the
@@ -252,10 +266,10 @@ options set on App(s)/Group(s). The SecretIDs generated will expire after
 a period defined by the 'secret_id_ttl' option and/or the backend mount's
 maximum TTL value.`
 
-const pathSuperGroupCredsHelpSys = `Generate SecretID against any combination of registered App(s)
+const pathSuperGroupSecretIDHelpSys = `Generate SecretID against any combination of registered App(s)
 and/or Group(s), with custom options.`
 
-const pathSuperGroupCredsHelpDesc = `The SecretID generated using this endpoint will be able to
+const pathSuperGroupSecretIDHelpDesc = `The SecretID generated using this endpoint will be able to
 access all the specified Apps and all the participating Apps of all the
 specified Groups. The options specified on this endpoint will supercede
 all the options set on App(s)/Group(s). The SecretIDs generated will expire

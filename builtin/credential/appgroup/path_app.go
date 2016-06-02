@@ -28,6 +28,9 @@ type appStorageEntry struct {
 
 	// Duration after which an issued token should not be allowed to be renewed
 	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
+
+	// A constraint to require 'secret_id' credential during login
+	BindSecretID bool `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
 }
 
 // appPaths creates all the paths that are used to register and manage an App.
@@ -40,8 +43,9 @@ type appStorageEntry struct {
 // app/secret-id-ttl
 // app/token-ttl
 // app/token-max-ttl
-// app/<app_name>/creds
-// app/<app_name>/creds-specific
+// app/bind-secret-id
+// app/<app_name>/secret-id
+// app/<app_name>/custom-secret-id
 func appPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
@@ -58,6 +62,11 @@ func appPaths(b *backend) []*framework.Path {
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Default:     true,
+					Description: "Impose secret_id to be presented during login using this App.",
 				},
 				"policies": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -109,6 +118,26 @@ func appPaths(b *backend) []*framework.Path {
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-policies"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-policies"][1]),
+		},
+		&framework.Path{
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/bind-secret-id$",
+			Fields: map[string]*framework.FieldSchema{
+				"app_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the App.",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Description: "Impose secret_id to be presented during login using this App.",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.UpdateOperation: b.pathAppBindSecretIDUpdate,
+				logical.ReadOperation:   b.pathAppBindSecretIDRead,
+				logical.DeleteOperation: b.pathAppBindSecretIDDelete,
+			},
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-bind-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-bind-secret-id"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/num-uses$",
@@ -191,7 +220,7 @@ func appPaths(b *backend) []*framework.Path {
 			HelpDescription: strings.TrimSpace(appHelp["app-token-max-ttl"][1]),
 		},
 		&framework.Path{
-			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/creds$",
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -199,13 +228,13 @@ func appPaths(b *backend) []*framework.Path {
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.ReadOperation: b.pathAppCredsRead,
+				logical.ReadOperation: b.pathAppSecretIDRead,
 			},
-			HelpSynopsis:    strings.TrimSpace(appHelp["app-creds"][0]),
-			HelpDescription: strings.TrimSpace(appHelp["app-creds"][1]),
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-secret-id"][1]),
 		},
 		&framework.Path{
-			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/creds-specific$",
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/custom-secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -218,10 +247,10 @@ func appPaths(b *backend) []*framework.Path {
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathAppCredsSpecificUpdate,
+				logical.UpdateOperation: b.pathAppCustomSecretIDUpdate,
 			},
-			HelpSynopsis:    strings.TrimSpace(appHelp["app-creds-specific"][0]),
-			HelpDescription: strings.TrimSpace(appHelp["app-creds-specific"][1]),
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-custom-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-custom-secret-id"][1]),
 		},
 	}
 }
@@ -373,6 +402,67 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	defer b.appLock.Unlock()
 
 	return nil, req.Storage.Delete("app/" + strings.ToLower(appName))
+}
+
+func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		app.BindSecretID = bindSecretIDRaw.(bool)
+		return nil, b.setAppEntry(req.Storage, appName, app)
+	} else {
+		return logical.ErrorResponse("missing bind_secret_id"), nil
+	}
+}
+
+func (b *backend) pathAppBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	if app, err := b.appEntry(req.Storage, strings.ToLower(appName)); err != nil {
+		return nil, err
+	} else if app == nil {
+		return nil, nil
+	} else {
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"bind_secret_id": app.BindSecretID,
+			},
+		}, nil
+	}
+}
+
+func (b *backend) pathAppBindSecretIDDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	// Deleting a field means resetting the value in the entry.
+	app.BindSecretID = (&appStorageEntry{}).BindSecretID
+
+	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
 func (b *backend) pathAppPoliciesUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -692,19 +782,19 @@ func (b *backend) pathAppTokenMaxTTLDelete(req *logical.Request, data *framework
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
-func (b *backend) pathAppCredsRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
 	}
-	return b.handleAppCredsCommon(req, data, secretID)
+	return b.handleAppSecretIDCommon(req, data, secretID)
 }
 
-func (b *backend) pathAppCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleAppCredsCommon(req, data, data.Get("secret_id").(string))
+func (b *backend) pathAppCustomSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	return b.handleAppSecretIDCommon(req, data, data.Get("secret_id").(string))
 }
 
-func (b *backend) handleAppCredsCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
+func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -749,10 +839,15 @@ The set of policies on the App defines access to the App, meaning, any
 Vault token with a policy set that is a superset of the policies on the
 App registered here will have access to the App. If a SecretID is desired
 to be generated against only this specific App, it can be done via
-'app/<app_name>/creds' and 'app/<app_name>/creds-specific' endpoints.
+'app/<app_name>/secret-id' and 'app/<app_name>/custom-secret-id' endpoints.
 The properties of the SecretID created against the App and the properties
 of the token issued with the SecretID generated againt the App, can be
 configured using the parameters of this endpoint.`,
+	},
+	"app-bind-secret-id": {
+		"Impose secret_id to be presented during login using this App.",
+		`By setting this to 'true', during login the parameter 'secret_id' becomes a mandatory argument.
+The value of 'secret_id' can be retrieved using 'app/<app_name>/secret-id' endpoint.`,
 	},
 	"app-policies": {
 		"Policies of the App.",
@@ -763,21 +858,21 @@ defined on the App, can access the App.`,
 	"app-num-uses": {
 		"Use limit of the SecretID generated against the App.",
 		`If the SecretIDs are generated/assigned against the App using the
-'app/<app_name>/creds' or 'app/<app_name>/creds-specific' endpoints,
+'app/<app_name>/secret-id' or 'app/<app_name>/custom-secret-id' endpoints,
 then the number of times that SecretID can access the App is defined by
 this option.`,
 	},
 	"app-secret-id-ttl": {
 		`Duration in seconds, representing the lifetime of the SecretIDs
-that are generated against the App using 'app/<app_name>/creds' or
-'app/<app_name>/creds-specific' endpoints.`,
+that are generated against the App using 'app/<app_name>/secret-id' or
+'app/<app_name>/custom-secret-id' endpoints.`,
 		``,
 	},
 	"app-token-ttl": {
 		`Duration in seconds, the lifetime of the token issued by using the SecretID that
 is generated against this App, before which the token needs to be renewed.`,
-		`If SecretIDs are generated against the App, using 'app/<app_name>/creds' or the
-'app/<app_name>/creds-specific' endpoints, and if those SecretIDs are used
+		`If SecretIDs are generated against the App, using 'app/<app_name>/secret-id' or the
+'app/<app_name>/custom-secret-id' endpoints, and if those SecretIDs are used
 to perform the login operation, then the value of 'token-ttl' defines the
 lifetime of the token issued, before which the token needs to be renewed.`,
 	},
@@ -785,14 +880,14 @@ lifetime of the token issued, before which the token needs to be renewed.`,
 		`Duration in seconds, the maximum lifetime of the tokens issued by using
 the SecretIDs that were generated against this App, after which the
 tokens are not allowed to be renewed.`,
-		`If SecretIDs are generated against the App using 'app/<app_name>/creds'
-or the 'app/<app_name>/creds-specific' endpoints, and if those SecretIDs
+		`If SecretIDs are generated against the App using 'app/<app_name>/secret-id'
+or the 'app/<app_name>/custom-secret-id' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximum TTL value.`,
 	},
-	"app-creds": {
+	"app-secret-id": {
 		"Generate a SecretID against this App.",
 		`The SecretID generated using this endpoint will be scoped to access
 just this App and none else. The properties of this SecretID will be
@@ -800,7 +895,7 @@ based on the options set on the App. It will expire after a period
 defined by the 'secret_id_ttl' option on the App and/or the backend
 mount's maximum TTL value.`,
 	},
-	"app-creds-specific": {
+	"app-custom-secret-id": {
 		"Assign a SecretID of choice against the App.",
 		`This option is not recommended unless there is a specific need
 to do so. This will assign a client supplied SecretID to be used to access

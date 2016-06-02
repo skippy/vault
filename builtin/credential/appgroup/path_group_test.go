@@ -32,7 +32,7 @@ func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, a
 	}
 
 }
-func TestBackend_group_creds(t *testing.T) {
+func TestBackend_group_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
@@ -77,12 +77,12 @@ func TestBackend_group_creds(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	groupCredsReq := &logical.Request{
+	groupSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
-		Path:      "group/group1/creds",
+		Path:      "group/group1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(groupCredsReq)
+	resp, err = b.HandleRequest(groupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -91,13 +91,13 @@ func TestBackend_group_creds(t *testing.T) {
 		t.Fatalf("failed to generate secret_id")
 	}
 
-	groupCredsReq.Path = "group/group1/creds-specific"
-	groupCredsSpecificData := map[string]interface{}{
+	groupSecretIDReq.Path = "group/group1/custom-secret-id"
+	groupCustomSecretIDData := map[string]interface{}{
 		"secret_id": "abcd123",
 	}
-	groupCredsReq.Data = groupCredsSpecificData
-	groupCredsReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(groupCredsReq)
+	groupSecretIDReq.Data = groupCustomSecretIDData
+	groupSecretIDReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(groupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -242,6 +242,46 @@ func TestBackend_group_CRUD(t *testing.T) {
 	}
 
 	if resp.Data["apps"].([]string) != nil {
+		t.Fatalf("expected value to be reset")
+	}
+
+	// RUD for bind_secret_id field
+	groupReq.Path = "group/group1/bind-secret-id"
+	groupReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	groupReq.Data = map[string]interface{}{"bind_secret_id": false}
+	groupReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	groupReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["bind_secret_id"].(bool) {
+		t.Fatalf("bad: bind_secret_id: expected:false actual:%t\n", resp.Data["bind_secret_id"].(bool))
+	}
+	groupReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	groupReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["bind_secret_id"].(bool) {
 		t.Fatalf("expected value to be reset")
 	}
 

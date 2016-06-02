@@ -22,7 +22,7 @@ func TestBackend_supergroup_login(t *testing.T) {
 	createGroup(t, b, storage, "group2", "app5,app6", "o,p")
 	createGroup(t, b, storage, "group3", "app3,app4,app5,app6", "q,r")
 
-	superGroupCredsData := map[string]interface{}{
+	superGroupSecretIDData := map[string]interface{}{
 		"groups":              "group1,group2,group3",
 		"apps":                "app1,app2",
 		"additional_policies": "s,t",
@@ -32,14 +32,14 @@ func TestBackend_supergroup_login(t *testing.T) {
 		"token_max_ttl":       502,
 	}
 
-	superGroupCredsReq := &logical.Request{
+	superGroupSecretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "supergroup/creds",
+		Path:      "supergroup/secret-id",
 		Storage:   storage,
-		Data:      superGroupCredsData,
+		Data:      superGroupSecretIDData,
 	}
 
-	resp, err = b.HandleRequest(superGroupCredsReq)
+	resp, err = b.HandleRequest(superGroupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -77,12 +77,12 @@ func TestBackend_group_login(t *testing.T) {
 	createApp(t, b, storage, "app2", "c,d")
 	createGroup(t, b, storage, "group1", "app1,app2", "e,f")
 
-	groupCredsReq := &logical.Request{
+	groupSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
-		Path:      "group/group1/creds",
+		Path:      "group/group1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(groupCredsReq)
+	resp, err = b.HandleRequest(groupSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -119,12 +119,12 @@ func TestBackend_app_login(t *testing.T) {
 
 	createApp(t, b, storage, "app1", "a,b,c")
 
-	appCredsReq := &logical.Request{
+	appSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
-		Path:      "app/app1/creds",
+		Path:      "app/app1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(appCredsReq)
+	resp, err = b.HandleRequest(appSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}

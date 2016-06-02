@@ -30,6 +30,9 @@ type groupStorageEntry struct {
 	// Duration after which an issued token should not be allowed to be renewed
 	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
 
+	// A constraint to require 'secret_id' credential during login
+	BindSecretID bool `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
+
 	// Along with the combined set of Apps' policies, the policies in this list will be
 	// added to capabilities of the token issued, when a SecretID generated against a Group
 	// is used perform the login.
@@ -42,12 +45,13 @@ type groupStorageEntry struct {
 // group/
 // group/<group_name>
 // group/policies
+// group/bind-secret-id
 // group/num-uses
 // group/secret_id-ttl
 // group/token-ttl
 // group/token-max-ttl
-// group/<group_name>/creds
-// group/<group_name>/creds-specific
+// group/<group_name>/secret-id
+// group/<group_name>/custom-secret-id
 func groupPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
@@ -69,6 +73,11 @@ func groupPaths(b *backend) []*framework.Path {
 					Type:        framework.TypeString,
 					Default:     "",
 					Description: "Comma separated list of Apps belonging to the group",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Default:     true,
+					Description: "Impose secret_id to be presented during login using this Group.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
@@ -124,6 +133,26 @@ addition to those, a set of policies can be assigned using this.
 			},
 			HelpSynopsis:    strings.TrimSpace(groupHelp["group-apps"][0]),
 			HelpDescription: strings.TrimSpace(groupHelp["group-apps"][1]),
+		},
+		&framework.Path{
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/bind-secret-id$",
+			Fields: map[string]*framework.FieldSchema{
+				"group_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the Group.",
+				},
+				"bind_secret_id": &framework.FieldSchema{
+					Type:        framework.TypeBool,
+					Description: "Impose secret_id to be presented during login using this Group.",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.UpdateOperation: b.pathGroupBindSecretIDUpdate,
+				logical.ReadOperation:   b.pathGroupBindSecretIDRead,
+				logical.DeleteOperation: b.pathGroupBindSecretIDDelete,
+			},
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-bind-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-bind-secret-id"][1]),
 		},
 		&framework.Path{
 			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/additional-policies$",
@@ -230,7 +259,7 @@ addition to those, a set of policies can be assigned using this.
 			HelpDescription: strings.TrimSpace(groupHelp["group-token-max-ttl"][1]),
 		},
 		&framework.Path{
-			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/creds$",
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"group_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -238,13 +267,13 @@ addition to those, a set of policies can be assigned using this.
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.ReadOperation: b.pathGroupCredsRead,
+				logical.ReadOperation: b.pathGroupSecretIDRead,
 			},
-			HelpSynopsis:    strings.TrimSpace(groupHelp["group-creds"][0]),
-			HelpDescription: strings.TrimSpace(groupHelp["group-creds"][1]),
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-secret-id"][1]),
 		},
 		&framework.Path{
-			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/creds-specific$",
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/custom-secret-id$",
 			Fields: map[string]*framework.FieldSchema{
 				"group_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -257,10 +286,10 @@ addition to those, a set of policies can be assigned using this.
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathGroupCredsSpecificUpdate,
+				logical.UpdateOperation: b.pathGroupCustomSecretIDUpdate,
 			},
-			HelpSynopsis:    strings.TrimSpace(groupHelp["group-creds-specific"][0]),
-			HelpDescription: strings.TrimSpace(groupHelp["group-creds-specific"][1]),
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-custom-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-custom-secret-id"][1]),
 		},
 	}
 }
@@ -467,6 +496,66 @@ func (b *backend) pathGroupAppsDelete(req *logical.Request, data *framework.Fiel
 	}
 
 	group.Apps = (&groupStorageEntry{}).Apps
+
+	return nil, b.setGroupEntry(req.Storage, groupName, group)
+}
+
+func (b *backend) pathGroupBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, nil
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		group.BindSecretID = bindSecretIDRaw.(bool)
+		return nil, b.setGroupEntry(req.Storage, groupName, group)
+	} else {
+		return logical.ErrorResponse("missing bind_secret_id"), nil
+	}
+}
+
+func (b *backend) pathGroupBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	if group, err := b.groupEntry(req.Storage, strings.ToLower(groupName)); err != nil {
+		return nil, err
+	} else if group == nil {
+		return nil, nil
+	} else {
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"bind_secret_id": group.BindSecretID,
+			},
+		}, nil
+	}
+}
+
+func (b *backend) pathGroupBindSecretIDDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, nil
+	}
+
+	group.BindSecretID = (&groupStorageEntry{}).BindSecretID
 
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
@@ -783,19 +872,19 @@ func (b *backend) pathGroupTokenMaxTTLDelete(req *logical.Request, data *framewo
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
 
-func (b *backend) pathGroupCredsRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
 	}
-	return b.handleGroupCredsCommon(req, data, secretID)
+	return b.handleGroupSecretIDCommon(req, data, secretID)
 }
 
-func (b *backend) pathGroupCredsSpecificUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return b.handleGroupCredsCommon(req, data, data.Get("secret_id").(string))
+func (b *backend) pathGroupCustomSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	return b.handleGroupSecretIDCommon(req, data, data.Get("secret_id").(string))
 }
 
-func (b *backend) handleGroupCredsCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
+func (b *backend) handleGroupSecretIDCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -849,6 +938,11 @@ effective policies.`,
 		`All the Apps listed here should be registered with the backend before the
 login operation is performed. `,
 	},
+	"group-bind-secret-id": {
+		"Impose secret_id to be presented during login using this Group.",
+		`By setting this to 'true', during login the parameter 'secret_id' becomes a mandatory argument.
+The value of 'secret_id' can be retrieved using 'group/<group_name>/secret-id' endpoint.`,
+	},
 	"group-additional-policies": {
 		`Additional policies to be assigned to the tokens issued by using the SecretIDs
 that were generated against this group.`,
@@ -861,16 +955,16 @@ to the issued token's effective policies.`,
 	"group-num-uses": {
 		"Use limit of the SecretID generated against the group.",
 		`If the SecretIDs are generated/assigned against the group using
-'group/<group_name>/creds' or 'group/<group_name>/creds-specific'
+'group/<group_name>/secret-id' or 'group/<group_name>/custom-secret-id'
 endpoints, then the number of times that these SecretIDs can access
 the participating Apps is defined by this option.`,
 	},
 	"group-secret_id-ttl": {
 		`Duration in seconds, representing the lifetime of the SecretIDs
-that are generated against the Group using 'group/<group_name>/creds'
-or 'group/<group_name>/creds-specific' endpoints.`,
-		`If the SecretIDs are generated against the Group using 'group/<group_name>/creds'
-or 'group/<group_name>/creds-specific' endpoints, then those SecretIDs
+that are generated against the Group using 'group/<group_name>/secret-id'
+or 'group/<group_name>/custom-secret-id' endpoints.`,
+		`If the SecretIDs are generated against the Group using 'group/<group_name>/secret-id'
+or 'group/<group_name>/custom-secret-id' endpoints, then those SecretIDs
 will expire after the duration specified by this option. Note that this
 value will be capped by the backend mount's maximux TTL value.`,
 	},
@@ -878,22 +972,22 @@ value will be capped by the backend mount's maximux TTL value.`,
 		`Duration in seconds, the lifetime of the token issued by using
 the SecretID that is generated against this Group, before which the token
 needs to be renewed.`,
-		`If SecretIDs are generated against the Group, using 'group/<group_name>/creds'
-or the 'group/<group_name>/creds-specific' endpoints, and if those SecretIDs
+		`If SecretIDs are generated against the Group, using 'group/<group_name>/secret-id'
+or the 'group/<group_name>/custom-secret-id' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-ttl'
 defines the lifetime of the token issued, before which teh token needs
 to be renewed.`,
 	},
 	"group-token-max-ttl": {
 		`Duration in seconds, the maximux lifetime of the tokens issued by using the SecretID that were generated against the Group, after which the tokens are not allowed to be renewed.`,
-		`If SecretIDs are generated against the Group using 'group/<group_name>/creds'
-or the 'group/<group_name>/creds-specific' endpoints, and if those SecretIDs
+		`If SecretIDs are generated against the Group using 'group/<group_name>/secret-id'
+or the 'group/<group_name>/custom-secret-id' endpoints, and if those SecretIDs
 are used to perform the login operation, then the value of 'token-max-ttl'
 defines the maximum lifetime of the tokens issued, after which the tokens
 cannot be renewed. A reauthentication is required after this duration.
 This value will be capped by the backend mount's maximux TTL value.`,
 	},
-	"group-creds": {
+	"group-secret-id": {
 		"Generate a SecretID against this Group.",
 		`The SecretID generated using this endpoint will be scoped to access
 the participant Apps of this Group. The properties of this SecretID will
@@ -901,7 +995,7 @@ be based on the options set on the Group. It will expire after a period
 defined by the 'secret_id_ttl' option on the Group and/or the backend mount's
 maximum TTL value.`,
 	},
-	"group-creds-specific": {
+	"group-custom-secret-id": {
 		"Assign a SecretID of choice against the Group.",
 		`This option is not recommended unless there is a specific need
 to do so. This will assign a client supplied SecretID to be used to access
