@@ -27,10 +27,6 @@ type backend struct {
 	superGroupLock *sync.RWMutex
 
 	// Map of locks to make changes to the SecretIDs created.
-	// The lock in the map will be keyed off of SecretID itself.
-	// Each SecretID will have a separate lock which is used to
-	// update the information related to it, 'num_uses' for example.
-	// The lock will be deleted when the SecretID is delted.
 	secretIDLocksMap map[string]*sync.RWMutex
 }
 

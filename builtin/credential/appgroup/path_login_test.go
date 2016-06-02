@@ -26,7 +26,7 @@ func TestBackend_supergroup_login(t *testing.T) {
 		"groups":              "group1,group2,group3",
 		"apps":                "app1,app2",
 		"additional_policies": "s,t",
-		"num_uses":            122,
+		"secret_id_num_uses":  122,
 		"secret_id_ttl":       302,
 		"token_ttl":           402,
 		"token_max_ttl":       502,

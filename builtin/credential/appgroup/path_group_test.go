@@ -13,7 +13,7 @@ func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, a
 	groupData := map[string]interface{}{
 		"apps":                apps,
 		"additional_policies": additionalPolicies,
-		"num_uses":            10,
+		"secret_id_num_uses":  10,
 		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
@@ -37,11 +37,11 @@ func TestBackend_group_secret_id(t *testing.T) {
 	b, storage := createBackendWithStorage(t)
 
 	appData := map[string]interface{}{
-		"policies":      "p,q,r,s",
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"policies":           "p,q,r,s",
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -58,7 +58,7 @@ func TestBackend_group_secret_id(t *testing.T) {
 	groupData := map[string]interface{}{
 		"apps":                "app1",
 		"additional_policies": "t,u,v,w",
-		"num_uses":            11,
+		"secret_id_num_uses":  11,
 		"secret_id_ttl":       301,
 		"token_ttl":           401,
 		"token_max_ttl":       501,
@@ -113,7 +113,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupData := map[string]interface{}{
 		"apps":                "app1,app2",
 		"additional_policies": "p,q,r,s",
-		"num_uses":            10,
+		"secret_id_num_uses":  10,
 		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
@@ -140,7 +140,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		"bind_secret_id":      true,
 		"apps":                []string{"app1", "app2"},
 		"additional_policies": []string{"default", "p", "q", "r", "s"},
-		"num_uses":            10,
+		"secret_id_num_uses":  10,
 		"secret_id_ttl":       300,
 		"token_ttl":           400,
 		"token_max_ttl":       500,
@@ -164,7 +164,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	groupData = map[string]interface{}{
 		"apps":                "app11,app21",
 		"additional_policies": "a,b,c,d",
-		"num_uses":            100,
+		"secret_id_num_uses":  100,
 		"secret_id_ttl":       3000,
 		"token_ttl":           4000,
 		"token_max_ttl":       5000,
@@ -186,7 +186,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	expected = map[string]interface{}{
 		"apps":                []string{"app11", "app21"},
 		"additional_policies": []string{"a", "b", "c", "d", "default"},
-		"num_uses":            100,
+		"secret_id_num_uses":  100,
 		"secret_id_ttl":       3000,
 		"token_ttl":           4000,
 		"token_max_ttl":       5000,
@@ -333,7 +333,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	groupReq.Data = map[string]interface{}{"num_uses": 200}
+	groupReq.Data = map[string]interface{}{"secret_id_num_uses": 200}
 	groupReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(groupReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -346,8 +346,8 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["num_uses"].(int) != 200 {
-		t.Fatalf("bad: num_uses: expected:200 actual:%d\n", resp.Data["num_uses"].(int))
+	if resp.Data["secret_id_num_uses"].(int) != 200 {
+		t.Fatalf("bad: secret_id_num_uses: expected:200 actual:%d\n", resp.Data["secret_id_num_uses"].(int))
 	}
 	groupReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(groupReq)
@@ -361,7 +361,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["num_uses"].(int) != 0 {
+	if resp.Data["secret_id_num_uses"].(int) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
 

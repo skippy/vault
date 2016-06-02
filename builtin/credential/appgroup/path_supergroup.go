@@ -25,7 +25,7 @@ type superGroupStorageEntry struct {
 	Apps []string `json:"apps" structs:"apps" mapstructure:"apps"`
 
 	// Number of times the generated SecretID can be used to perform login
-	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
+	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
 	// Duration (less than the backend mount's max TTL) after which a SecretID generated will expire
 	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
@@ -78,7 +78,7 @@ will have access to the union of all the policies of the Apps. In
 addition to those, a set of policies can be assigned using this.
 `,
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
@@ -129,7 +129,7 @@ will have access to the union of all the policies of the Apps. In
 addition to those, a set of policies can be assigned using this.
 `,
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
@@ -219,7 +219,7 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		Apps:               strutil.ParseStrings(data.Get("apps").(string)),
 		BindSecretID:       data.Get("bind_secret_id").(bool),
 		AdditionalPolicies: policyutil.ParsePolicies(data.Get("additional_policies").(string)),
-		NumUses:            data.Get("num_uses").(int),
+		SecretIDNumUses:    data.Get("secret_id_num_uses").(int),
 		SecretIDTTL:        time.Second * time.Duration(data.Get("secret_id_ttl").(int)),
 		TokenTTL:           time.Second * time.Duration(data.Get("token_ttl").(int)),
 		TokenMaxTTL:        time.Second * time.Duration(data.Get("token_max_ttl").(int)),
@@ -229,8 +229,8 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return logical.ErrorResponse("missing groups and/or apps"), nil
 	}
 
-	if superGroup.NumUses < 0 {
-		return logical.ErrorResponse("num_uses cannot be negative"), nil
+	if superGroup.SecretIDNumUses < 0 {
+		return logical.ErrorResponse("secret_id_num_uses cannot be negative"), nil
 	}
 
 	if superGroup.TokenMaxTTL > time.Duration(0) && superGroup.TokenTTL > superGroup.TokenMaxTTL {
@@ -254,8 +254,8 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 	}
 
 	if err := b.registerSecretIDEntry(req.Storage, selectorTypeSuperGroup, superGroupName, secretID, &secretIDStorageEntry{
-		NumUses:     superGroup.NumUses,
-		SecretIDTTL: superGroup.SecretIDTTL,
+		SecretIDNumUses: superGroup.SecretIDNumUses,
+		SecretIDTTL:     superGroup.SecretIDTTL,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}

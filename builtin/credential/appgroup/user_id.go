@@ -21,7 +21,7 @@ const (
 // The structure of the SecretID storage entry is the same for all the types of SecretIDs generated.
 type secretIDStorageEntry struct {
 	// Number of times this SecretID can be used to perform the login operation
-	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
+	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
 	// Duration after which this SecretID should expire. This is capped by the backend mount's
 	// max TTL value.
@@ -221,15 +221,15 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorVa
 		return false, err
 	}
 
-	// NumUses will be zero only if the usage limit was not set at all,
+	// SecretIDNumUses will be zero only if the usage limit was not set at all,
 	// in which case, the SecretID will remain to be valid as long as it is not
 	// expired.
-	if result.NumUses == 0 {
+	if result.SecretIDNumUses == 0 {
 		lock.RUnlock()
 		return true, nil
 	}
 
-	// If the NumUses is non-zero, it means that its use-count should be updated
+	// If the SecretIDNumUses is non-zero, it means that its use-count should be updated
 	// in the storage. Switch the lock from a `read` to a `write` and update
 	// the storage entry.
 	lock.RUnlock()
@@ -251,7 +251,7 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorVa
 	// the storage but do not fail the validation request. Delete the
 	// SecretIDs lock from the map of locks. Subsequest requests to use
 	// the same SecretID will fail.
-	if result.NumUses == 1 {
+	if result.SecretIDNumUses == 1 {
 		if err := s.Delete(entryIndex); err != nil {
 			return false, err
 		}
@@ -266,12 +266,12 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorVa
 		}
 	} else {
 		// If the use count is greater than one, decrement it and update the last updated time.
-		result.NumUses -= 1
+		result.SecretIDNumUses -= 1
 		result.LastUpdatedTime = time.Now().UTC()
 		if entry, err := logical.StorageEntryJSON(entryIndex, &result); err != nil {
-			return false, fmt.Errorf("failed to decrement the num_uses for secret ID:%s", secretID)
+			return false, fmt.Errorf("failed to decrement the use count for secret ID:%s", secretID)
 		} else if err = s.Put(entry); err != nil {
-			return false, fmt.Errorf("failed to decrement the num_uses for secret ID:%s", secretID)
+			return false, fmt.Errorf("failed to decrement the use count for secret ID:%s", secretID)
 		}
 	}
 

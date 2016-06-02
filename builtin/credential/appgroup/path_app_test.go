@@ -11,11 +11,11 @@ import (
 
 func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies string) {
 	appData := map[string]interface{}{
-		"policies":      policies,
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"policies":           policies,
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -36,11 +36,11 @@ func TestBackend_app_secret_id(t *testing.T) {
 	b, storage := createBackendWithStorage(t)
 
 	appData := map[string]interface{}{
-		"policies":      "p,q,r,s",
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"policies":           "p,q,r,s",
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -90,11 +90,11 @@ func TestBackend_app_CRUD(t *testing.T) {
 	b, storage := createBackendWithStorage(t)
 
 	appData := map[string]interface{}{
-		"policies":      "p,q,r,s",
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"policies":           "p,q,r,s",
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -115,12 +115,12 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	expected := map[string]interface{}{
-		"bind_secret_id": true,
-		"policies":       []string{"default", "p", "q", "r", "s"},
-		"num_uses":       10,
-		"secret_id_ttl":  300,
-		"token_ttl":      400,
-		"token_max_ttl":  500,
+		"bind_secret_id":     true,
+		"policies":           []string{"default", "p", "q", "r", "s"},
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	var expectedStruct appStorageEntry
 	err = mapstructure.Decode(expected, &expectedStruct)
@@ -139,11 +139,11 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	appData = map[string]interface{}{
-		"policies":      "a,b,c,d",
-		"num_uses":      100,
-		"secret_id_ttl": 3000,
-		"token_ttl":     4000,
-		"token_max_ttl": 5000,
+		"policies":           "a,b,c,d",
+		"secret_id_num_uses": 100,
+		"secret_id_ttl":      3000,
+		"token_ttl":          4000,
+		"token_max_ttl":      5000,
 	}
 	appReq.Data = appData
 	appReq.Operation = logical.UpdateOperation
@@ -160,11 +160,11 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	expected = map[string]interface{}{
-		"policies":      []string{"a", "b", "c", "d", "default"},
-		"num_uses":      100,
-		"secret_id_ttl": 3000,
-		"token_ttl":     4000,
-		"token_max_ttl": 5000,
+		"policies":           []string{"a", "b", "c", "d", "default"},
+		"secret_id_num_uses": 100,
+		"secret_id_ttl":      3000,
+		"token_ttl":          4000,
+		"token_max_ttl":      5000,
 	}
 	err = mapstructure.Decode(expected, &expectedStruct)
 	if err != nil {
@@ -268,7 +268,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"num_uses": 200}
+	appReq.Data = map[string]interface{}{"secret_id_num_uses": 200}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -281,8 +281,8 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["num_uses"].(int) != 200 {
-		t.Fatalf("bad: num_uses: expected:200 actual:%d\n", resp.Data["num_uses"].(int))
+	if resp.Data["secret_id_num_uses"].(int) != 200 {
+		t.Fatalf("bad: secret_id_num_uses: expected:200 actual:%d\n", resp.Data["secret_id_num_uses"].(int))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
@@ -296,7 +296,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["num_uses"].(int) != 0 {
+	if resp.Data["secret_id_num_uses"].(int) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
 

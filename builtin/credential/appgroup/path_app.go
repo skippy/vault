@@ -21,7 +21,7 @@ type appStorageEntry struct {
 	Policies []string `json:"policies" structs:"policies" mapstructure:"policies"`
 
 	// Number of times the SecretID generated against the App can be used to perform login
-	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
+	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
 	// Duration (less than the backend mount's max TTL) after which a SecretID generated against the App will expire
 	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
@@ -76,7 +76,7 @@ func appPaths(b *backend) []*framework.Path {
 					Default:     "default",
 					Description: "Comma separated list of policies on the App.",
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the App, after which it will expire.",
 				},
@@ -150,15 +150,15 @@ func appPaths(b *backend) []*framework.Path {
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the App, after which it will expire.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathAppNumUsesUpdate,
-				logical.ReadOperation:   b.pathAppNumUsesRead,
-				logical.DeleteOperation: b.pathAppNumUsesDelete,
+				logical.UpdateOperation: b.pathAppSecretIDNumUsesUpdate,
+				logical.ReadOperation:   b.pathAppSecretIDNumUsesRead,
+				logical.DeleteOperation: b.pathAppSecretIDNumUsesDelete,
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-num-uses"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-num-uses"][1]),
@@ -350,13 +350,13 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		app.Policies = policyutil.ParsePolicies(data.Get("policies").(string))
 	}
 
-	if numUsesRaw, ok := data.GetOk("num_uses"); ok {
-		app.NumUses = numUsesRaw.(int)
+	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
+		app.SecretIDNumUses = numUsesRaw.(int)
 	} else if req.Operation == logical.CreateOperation {
-		app.NumUses = data.Get("num_uses").(int)
+		app.SecretIDNumUses = data.Get("secret_id_num_uses").(int)
 	}
-	if app.NumUses < 0 {
-		return logical.ErrorResponse("num_uses cannot be negative"), nil
+	if app.SecretIDNumUses < 0 {
+		return logical.ErrorResponse("secret_id_num_uses cannot be negative"), nil
 	}
 
 	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
@@ -555,7 +555,7 @@ func (b *backend) pathAppPoliciesDelete(req *logical.Request, data *framework.Fi
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
-func (b *backend) pathAppNumUsesUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDNumUsesUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -569,18 +569,18 @@ func (b *backend) pathAppNumUsesUpdate(req *logical.Request, data *framework.Fie
 		return nil, nil
 	}
 
-	if numUsesRaw, ok := data.GetOk("num_uses"); ok {
-		app.NumUses = numUsesRaw.(int)
-		if app.NumUses < 0 {
-			return logical.ErrorResponse("num_uses cannot be negative"), nil
+	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
+		app.SecretIDNumUses = numUsesRaw.(int)
+		if app.SecretIDNumUses < 0 {
+			return logical.ErrorResponse("secret_id_num_uses cannot be negative"), nil
 		}
 		return nil, b.setAppEntry(req.Storage, appName, app)
 	} else {
-		return logical.ErrorResponse("missing num_uses"), nil
+		return logical.ErrorResponse("missing secret_id_num_uses"), nil
 	}
 }
 
-func (b *backend) pathAppNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -593,13 +593,13 @@ func (b *backend) pathAppNumUsesRead(req *logical.Request, data *framework.Field
 	} else {
 		return &logical.Response{
 			Data: map[string]interface{}{
-				"num_uses": app.NumUses,
+				"secret_id_num_uses": app.SecretIDNumUses,
 			},
 		}, nil
 	}
 }
 
-func (b *backend) pathAppNumUsesDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDNumUsesDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
@@ -614,7 +614,7 @@ func (b *backend) pathAppNumUsesDelete(req *logical.Request, data *framework.Fie
 	}
 
 	// Deleting a field means resetting the value in the entry.
-	app.NumUses = (&appStorageEntry{}).NumUses
+	app.SecretIDNumUses = (&appStorageEntry{}).SecretIDNumUses
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -846,8 +846,8 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 	}
 
 	if err = b.registerSecretIDEntry(req.Storage, selectorTypeApp, appName, secretID, &secretIDStorageEntry{
-		NumUses:     app.NumUses,
-		SecretIDTTL: app.SecretIDTTL,
+		SecretIDNumUses: app.SecretIDNumUses,
+		SecretIDTTL:     app.SecretIDTTL,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}

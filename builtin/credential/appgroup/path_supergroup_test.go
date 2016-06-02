@@ -12,11 +12,11 @@ func TestBackend_supergroup_secret_id(t *testing.T) {
 	b, storage := createBackendWithStorage(t)
 
 	appData := map[string]interface{}{
-		"policies":      "p,q,r,s",
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"policies":           "p,q,r,s",
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -33,7 +33,7 @@ func TestBackend_supergroup_secret_id(t *testing.T) {
 	groupData := map[string]interface{}{
 		"apps":                "app1",
 		"additional_policies": "t,u,v,w",
-		"num_uses":            11,
+		"secret_id_num_uses":  11,
 		"secret_id_ttl":       301,
 		"token_ttl":           401,
 		"token_max_ttl":       501,
@@ -55,7 +55,7 @@ func TestBackend_supergroup_secret_id(t *testing.T) {
 		"groups":              "group1",
 		"apps":                "app1",
 		"additional_policies": "x,y,z",
-		"num_uses":            122,
+		"secret_id_num_uses":  122,
 		"secret_id_ttl":       302,
 		"token_ttl":           402,
 		"token_max_ttl":       502,

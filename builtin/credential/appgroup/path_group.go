@@ -22,7 +22,7 @@ type groupStorageEntry struct {
 	Apps []string `json:"apps" structs:"apps" mapstructure:"apps"`
 
 	// Number of times the SecretID generated against the Group can be used to perform login
-	NumUses int `json:"num_uses" structs:"num_uses" mapstructure:"num_uses"`
+	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
 	// Duration (less than the backend mount's max TTL) after which a SecretID generated against the Group will expire
 	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
@@ -90,7 +90,7 @@ will have access to the union of all the policies of the Apps. In
 addition to those, a set of policies can be assigned using this.
 `,
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
@@ -188,15 +188,15 @@ addition to those, a set of policies can be assigned using this.
 					Type:        framework.TypeString,
 					Description: "Name of the Group.",
 				},
-				"num_uses": &framework.FieldSchema{
+				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
 					Description: "Number of times the a SecretID can access the Apps represented by the Group.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.UpdateOperation: b.pathGroupNumUsesUpdate,
-				logical.ReadOperation:   b.pathGroupNumUsesRead,
-				logical.DeleteOperation: b.pathGroupNumUsesDelete,
+				logical.UpdateOperation: b.pathGroupSecretIDNumUsesUpdate,
+				logical.ReadOperation:   b.pathGroupSecretIDNumUsesRead,
+				logical.DeleteOperation: b.pathGroupSecretIDNumUsesDelete,
 			},
 			HelpSynopsis:    strings.TrimSpace(groupHelp["group-num-uses"][0]),
 			HelpDescription: strings.TrimSpace(groupHelp["group-num-uses"][1]),
@@ -393,14 +393,14 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		group.AdditionalPolicies = policyutil.ParsePolicies(data.Get("additional_policies").(string))
 	}
 
-	if numUsesRaw, ok := data.GetOk("num_uses"); ok {
-		group.NumUses = numUsesRaw.(int)
+	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
+		group.SecretIDNumUses = numUsesRaw.(int)
 	} else if req.Operation == logical.CreateOperation {
-		group.NumUses = data.Get("num_uses").(int)
+		group.SecretIDNumUses = data.Get("secret_id_num_uses").(int)
 	}
 
-	if group.NumUses < 0 {
-		return logical.ErrorResponse("num_uses cannot be negative"), nil
+	if group.SecretIDNumUses < 0 {
+		return logical.ErrorResponse("secret_id_num_uses cannot be negative"), nil
 	}
 
 	if secretIDTTLRaw, ok := data.GetOk("secret_id_ttl"); ok {
@@ -648,7 +648,7 @@ func (b *backend) pathGroupAdditionalPoliciesDelete(req *logical.Request, data *
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
 
-func (b *backend) pathGroupNumUsesUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDNumUsesUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -662,18 +662,18 @@ func (b *backend) pathGroupNumUsesUpdate(req *logical.Request, data *framework.F
 		return nil, nil
 	}
 
-	if numUsesRaw, ok := data.GetOk("num_uses"); ok {
-		group.NumUses = numUsesRaw.(int)
-		if group.NumUses < 0 {
-			return logical.ErrorResponse("num_uses cannot be negative"), nil
+	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
+		group.SecretIDNumUses = numUsesRaw.(int)
+		if group.SecretIDNumUses < 0 {
+			return logical.ErrorResponse("secret_id_num_uses cannot be negative"), nil
 		}
 		return nil, b.setGroupEntry(req.Storage, groupName, group)
 	} else {
-		return logical.ErrorResponse("missing num_uses"), nil
+		return logical.ErrorResponse("missing secret_id_num_uses"), nil
 	}
 }
 
-func (b *backend) pathGroupNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDNumUsesRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -686,13 +686,13 @@ func (b *backend) pathGroupNumUsesRead(req *logical.Request, data *framework.Fie
 	} else {
 		return &logical.Response{
 			Data: map[string]interface{}{
-				"num_uses": group.NumUses,
+				"secret_id_num_uses": group.SecretIDNumUses,
 			},
 		}, nil
 	}
 }
 
-func (b *backend) pathGroupNumUsesDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupSecretIDNumUsesDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -706,7 +706,7 @@ func (b *backend) pathGroupNumUsesDelete(req *logical.Request, data *framework.F
 		return nil, nil
 	}
 
-	group.NumUses = (&groupStorageEntry{}).NumUses
+	group.SecretIDNumUses = (&groupStorageEntry{}).SecretIDNumUses
 
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
@@ -935,8 +935,8 @@ func (b *backend) handleGroupSecretIDCommon(req *logical.Request, data *framewor
 	}
 
 	if err = b.registerSecretIDEntry(req.Storage, selectorTypeGroup, groupName, secretID, &secretIDStorageEntry{
-		NumUses:     group.NumUses,
-		SecretIDTTL: group.SecretIDTTL,
+		SecretIDNumUses: group.SecretIDNumUses,
+		SecretIDTTL:     group.SecretIDTTL,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}
