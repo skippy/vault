@@ -69,7 +69,7 @@ func appPaths(b *backend) []*framework.Path {
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
 					Default:     true,
-					Description: "Impose secret_id to be presented during login using this App.",
+					Description: "Impose secret_id to be presented during login using this App. Defaults to 'true'.",
 				},
 				"policies": &framework.FieldSchema{
 					Type:        framework.TypeString,

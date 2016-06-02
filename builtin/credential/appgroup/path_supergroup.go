@@ -68,7 +68,7 @@ func superGroupPaths(b *backend) []*framework.Path {
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
 					Default:     true,
-					Description: "Impose secret_id to be presented during login using this supergroup.",
+					Description: "Impose secret_id to be presented during login using this supergroup. Defaults to 'true'.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
@@ -120,7 +120,7 @@ addition to those, a set of policies can be assigned using this.
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
 					Default:     true,
-					Description: "Impose secret_id to be presented during login using this supergroup.",
+					Description: "Impose secret_id to be presented during login using this supergroup. Defaults to 'true'.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type: framework.TypeString,
