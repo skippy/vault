@@ -38,12 +38,12 @@ type appStorageEntry struct {
 // Paths returned:
 // app/
 // app/<app_name>
-// app/policies
-// app/num-uses
-// app/secret-id-ttl
-// app/token-ttl
-// app/token-max-ttl
-// app/bind-secret-id
+// app/<app_name>/policies
+// app/<app_name>/num-uses
+// app/<app_name>/secret-id-ttl
+// app/<app_name>/token-ttl
+// app/<app_name>/token-max-ttl
+// app/<app_name>/bind-secret-id
 // app/<app_name>/secret-id
 // app/<app_name>/custom-secret-id
 func appPaths(b *backend) []*framework.Path {
@@ -90,6 +90,7 @@ func appPaths(b *backend) []*framework.Path {
 					Description: "Duration in seconds after which the issued token should not be allowed to be renewed.",
 				},
 			},
+			ExistenceCheck: b.pathAppExistenceCheck,
 			Callbacks: map[logical.Operation]framework.OperationFunc{
 				logical.CreateOperation: b.pathAppCreateUpdate,
 				logical.UpdateOperation: b.pathAppCreateUpdate,
@@ -255,6 +256,15 @@ func appPaths(b *backend) []*framework.Path {
 	}
 }
 
+// pathAppExistenceCheck returns if the app with the given name exists or not.
+func (b *backend) pathAppExistenceCheck(req *logical.Request, data *framework.FieldData) (bool, error) {
+	app, err := b.appEntry(req.Storage, data.Get("app_name").(string))
+	if err != nil {
+		return false, err
+	}
+	return app != nil, nil
+}
+
 // pathAppList is used to list all the Apps registered with the backend.
 func (b *backend) pathAppList(
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -317,6 +327,12 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 	// Create a new entry object if this is a CreateOperation
 	if app == nil {
 		app = &appStorageEntry{}
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		app.BindSecretID = bindSecretIDRaw.(bool)
+	} else if req.Operation == logical.CreateOperation {
+		app.BindSecretID = data.Get("bind_secret_id").(bool)
 	}
 
 	if policiesRaw, ok := data.GetOk("policies"); ok {
@@ -810,6 +826,10 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 	}
 	if app == nil {
 		return logical.ErrorResponse(fmt.Sprintf("app %s does not exist", appName)), nil
+	}
+
+	if !app.BindSecretID {
+		return logical.ErrorResponse("bind_secret_id is not set on the app"), nil
 	}
 
 	if err = b.registerSecretIDEntry(req.Storage, selectorTypeApp, appName, secretID, &secretIDStorageEntry{

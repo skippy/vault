@@ -240,6 +240,11 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return nil, err
 	}
 
+	// Currently only one bind is supported. So check if it is set.
+	if !superGroup.BindSecretID {
+		return logical.ErrorResponse("bind_secret_id is not set"), nil
+	}
+
 	if err := b.registerSecretIDEntry(req.Storage, selectorTypeSuperGroup, superGroupName, secretID, &secretIDStorageEntry{
 		NumUses:     superGroup.NumUses,
 		SecretIDTTL: superGroup.SecretIDTTL,

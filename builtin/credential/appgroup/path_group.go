@@ -44,12 +44,12 @@ type groupStorageEntry struct {
 // Paths returned:
 // group/
 // group/<group_name>
-// group/policies
-// group/bind-secret-id
-// group/num-uses
-// group/secret_id-ttl
-// group/token-ttl
-// group/token-max-ttl
+// group/<group_name>/policies
+// group/<group_name>/bind-secret-id
+// group/<group_name>/num-uses
+// group/<group_name>/secret_id-ttl
+// group/<group_name>/token-ttl
+// group/<group_name>/token-max-ttl
 // group/<group_name>/secret-id
 // group/<group_name>/custom-secret-id
 func groupPaths(b *backend) []*framework.Path {
@@ -294,6 +294,15 @@ addition to those, a set of policies can be assigned using this.
 	}
 }
 
+// pathGroupExistenceCheck returns if the group with the given name exists or not.
+func (b *backend) pathGroupExistenceCheck(req *logical.Request, data *framework.FieldData) (bool, error) {
+	group, err := b.groupEntry(req.Storage, data.Get("group_name").(string))
+	if err != nil {
+		return false, err
+	}
+	return group != nil, nil
+}
+
 // pathGroupList is used to list all the Groups registered with the backend.
 func (b *backend) pathGroupList(
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -361,6 +370,12 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		group.Apps = strutil.RemoveDuplicates(strings.Split(appsRaw.(string), ","))
 	} else if req.Operation == logical.CreateOperation {
 		group.Apps = strutil.RemoveDuplicates(strings.Split(data.Get("apps").(string), ","))
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		group.BindSecretID = bindSecretIDRaw.(bool)
+	} else if req.Operation == logical.CreateOperation {
+		group.BindSecretID = data.Get("bind_secret_id").(bool)
 	}
 
 	if additionalPoliciesRaw, ok := data.GetOk("additional_policies"); ok {
@@ -900,6 +915,10 @@ func (b *backend) handleGroupSecretIDCommon(req *logical.Request, data *framewor
 	}
 	if group == nil {
 		return logical.ErrorResponse(fmt.Sprintf("Group %s does not exist", groupName)), nil
+	}
+
+	if !group.BindSecretID {
+		return logical.ErrorResponse("bind_secret_id is not set on the group"), nil
 	}
 
 	if err = b.registerSecretIDEntry(req.Storage, selectorTypeGroup, groupName, secretID, &secretIDStorageEntry{

@@ -1,7 +1,6 @@
 package appgroup
 
 import (
-	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -116,11 +115,12 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	expected := map[string]interface{}{
-		"policies":      []string{"default", "p", "q", "r", "s"},
-		"num_uses":      10,
-		"secret_id_ttl": 300,
-		"token_ttl":     400,
-		"token_max_ttl": 500,
+		"bind_secret_id": true,
+		"policies":       []string{"default", "p", "q", "r", "s"},
+		"num_uses":       10,
+		"secret_id_ttl":  300,
+		"token_ttl":      400,
+		"token_max_ttl":  500,
 	}
 	var expectedStruct appStorageEntry
 	err = mapstructure.Decode(expected, &expectedStruct)
@@ -135,7 +135,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expectedStruct, actualStruct) {
-		log.Printf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
+		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
 	appData = map[string]interface{}{
@@ -177,7 +177,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expectedStruct, actualStruct) {
-		log.Printf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
+		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
 	// RUD for bind_secret_id field

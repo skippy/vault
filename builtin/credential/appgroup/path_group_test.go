@@ -1,7 +1,6 @@
 package appgroup
 
 import (
-	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -138,6 +137,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	}
 
 	expected := map[string]interface{}{
+		"bind_secret_id":      true,
 		"apps":                []string{"app1", "app2"},
 		"additional_policies": []string{"default", "p", "q", "r", "s"},
 		"num_uses":            10,
@@ -158,7 +158,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expectedStruct, actualStruct) {
-		log.Printf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
+		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
 	groupData = map[string]interface{}{
@@ -202,7 +202,7 @@ func TestBackend_group_CRUD(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(expectedStruct, actualStruct) {
-		log.Printf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
+		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
 	// RUD for apps field
