@@ -15,6 +15,9 @@ import (
 // superGroupStorageEntry stores all the options that are set during SecretID
 // creation in "supergroup" mode.
 type superGroupStorageEntry struct {
+	// UUID that uniquely represents this supergroup
+	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+
 	// All the Groups that are to be accessible by the SecretID created
 	Groups []string `json:"groups" structs:"groups" mapstructure:"groups"`
 
@@ -206,7 +209,12 @@ func (b *backend) pathSuperGroupCustomSecretIDUpdate(req *logical.Request, data 
 }
 
 func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
+	selectorID, err := uuid.GenerateUUID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+	}
 	superGroup := &superGroupStorageEntry{
+		SelectorID:         selectorID,
 		Groups:             strutil.ParseStrings(data.Get("groups").(string)),
 		Apps:               strutil.ParseStrings(data.Get("apps").(string)),
 		BindSecretID:       data.Get("bind_secret_id").(bool),
@@ -254,8 +262,8 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"secret_id": secretID,
-			"selector":  selectorTypeSuperGroup,
+			"secret_id":   secretID,
+			"selector_id": superGroup.SelectorID,
 		},
 	}, nil
 }

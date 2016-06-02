@@ -944,7 +944,6 @@ func (b *backend) handleGroupSecretIDCommon(req *logical.Request, data *framewor
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"secret_id": secretID,
-			"selector":  "group/" + groupName,
 		},
 	}, nil
 }

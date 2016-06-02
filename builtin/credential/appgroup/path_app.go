@@ -855,7 +855,6 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"secret_id": secretID,
-			"selector":  "app/" + appName,
 		},
 	}, nil
 }
