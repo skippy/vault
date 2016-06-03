@@ -281,7 +281,7 @@ addition to those, a set of policies can be assigned using this.
 			HelpDescription: strings.TrimSpace(groupHelp["group-selector-id"][1]),
 		},
 		&framework.Path{
-			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret-id$",
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret-id/?$",
 			Fields: map[string]*framework.FieldSchema{
 				"group_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -290,6 +290,26 @@ addition to those, a set of policies can be assigned using this.
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
 				logical.ReadOperation: b.pathGroupSecretIDRead,
+				logical.ListOperation: b.pathGroupSecretIDList,
+			},
+			HelpSynopsis:    strings.TrimSpace(groupHelp["group-secret-id"][0]),
+			HelpDescription: strings.TrimSpace(groupHelp["group-secret-id"][1]),
+		},
+		&framework.Path{
+			Pattern: "group/" + framework.GenericNameRegex("group_name") + "/secret-id/" + framework.GenericNameRegex("secret_id_hmac"),
+			Fields: map[string]*framework.FieldSchema{
+				"group_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the Group.",
+				},
+				"secret_id_hmac": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "HMAC of the secret ID",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation:   b.pathGroupSecretIDHMACRead,
+				logical.DeleteOperation: b.pathGroupSecretIDHMACDelete,
 			},
 			HelpSynopsis:    strings.TrimSpace(groupHelp["group-secret-id"][0]),
 			HelpDescription: strings.TrimSpace(groupHelp["group-secret-id"][1]),
@@ -336,6 +356,34 @@ func (b *backend) pathGroupList(
 		return nil, err
 	}
 	return logical.ListResponse(groups), nil
+}
+
+// pathGroupSecretIDList is used to list all the Apps registered with the backend.
+func (b *backend) pathGroupSecretIDList(
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	// Get the "custom" lock
+	lock := b.secretIDLock("")
+	lock.RLock()
+	defer lock.RUnlock()
+
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	group, err := b.appEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return logical.ErrorResponse(fmt.Sprintf("group %s does not exist", groupName)), nil
+	}
+
+	secrets, err := req.Storage.List(fmt.Sprintf("secret_id/%s", b.salt.SaltID(group.SelectorID)))
+	if err != nil {
+		return nil, err
+	}
+	return logical.ListResponse(secrets), nil
 }
 
 // setAppEntry grabs a write lock and stores the options on a Group into the storage
@@ -584,6 +632,74 @@ func (b *backend) pathGroupBindSecretIDUpdate(req *logical.Request, data *framew
 	} else {
 		return logical.ErrorResponse("missing bind_secret_id"), nil
 	}
+}
+
+func (b *backend) pathGroupSecretIDHMACRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	hashedSecretID := data.Get("secret_id_hmac").(string)
+	if hashedSecretID == "" {
+		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, fmt.Errorf("group %s does not exist", groupName)
+	}
+
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(group.SelectorID), hashedSecretID)
+
+	lock := b.secretIDLock(hashedSecretID)
+	lock.RLock()
+	defer lock.RUnlock()
+
+	result := secretIDStorageEntry{}
+	if entry, err := req.Storage.Get(entryIndex); err != nil {
+		return nil, err
+	} else if entry == nil {
+		return nil, nil
+	} else if err := entry.DecodeJSON(&result); err != nil {
+		return nil, err
+	}
+
+	respData := structs.New(result).Map()
+	return &logical.Response{
+		Data: respData,
+	}, nil
+}
+
+func (b *backend) pathGroupSecretIDHMACDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	hashedSecretID := data.Get("secret_id_hmac").(string)
+	if hashedSecretID == "" {
+		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, fmt.Errorf("group %s does not exist", groupName)
+	}
+
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(group.SelectorID), hashedSecretID)
+
+	lock := b.secretIDLock(hashedSecretID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return nil, req.Storage.Delete(entryIndex)
 }
 
 func (b *backend) pathGroupBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

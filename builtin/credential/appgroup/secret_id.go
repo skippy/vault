@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -150,7 +149,6 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 	if selector == nil {
 		return nil, fmt.Errorf("failed to find selector for selector_id:%s\n", selectorID)
 	}
-	log.Printf("selector:%#v\n", selector)
 
 	resp := &validationResponse{}
 	switch selector.Type {
@@ -257,7 +255,7 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 	}
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
-	lock := b.getSecretIDLock(secretID)
+	lock := b.secretIDLock(hashedSecretID)
 	lock.RLock()
 
 	result := secretIDStorageEntry{}
@@ -337,11 +335,11 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 	return true, nil
 }
 
-func (b *backend) getSecretIDLock(secretID string) *sync.RWMutex {
+func (b *backend) secretIDLock(hashedSecretID string) *sync.RWMutex {
 	var lock *sync.RWMutex
 	var ok bool
-	if len(secretID) >= 2 {
-		lock, ok = b.secretIDLocksMap[secretID[0:2]]
+	if len(hashedSecretID) >= 2 {
+		lock, ok = b.secretIDLocksMap[hashedSecretID[0:2]]
 	}
 	if !ok || lock == nil {
 		// Fall back for custom secret IDs
@@ -365,14 +363,14 @@ func createHMAC(key, value string) (string, error) {
 // lock in the map of locks maintained at the backend. The index into the
 // map is the SecretID itself. During login, if the SecretID supplied is not
 // having a corresponding lock in the map, the login attempt fails.
-func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretIDEntry *secretIDStorageEntry) error {
+func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretEntry *secretIDStorageEntry) error {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
 		return fmt.Errorf("failed to create HMAC of secret_id: %s", err)
 	}
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
-	lock := b.getSecretIDLock(secretID)
+	lock := b.secretIDLock(hashedSecretID)
 	lock.RLock()
 
 	entry, err := s.Get(entryIndex)
@@ -404,21 +402,21 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 
 	// Set the creation time for the SecretID
 	currentTime := time.Now().UTC()
-	secretIDEntry.CreationTime = currentTime
-	secretIDEntry.LastUpdatedTime = currentTime
+	secretEntry.CreationTime = currentTime
+	secretEntry.LastUpdatedTime = currentTime
 
 	// If SecretIDTTL is not specified or if it crosses the backend mount's limit,
 	// cap the expiration to backend's max. Otherwise, use it to determine the
 	// expiration time.
-	if secretIDEntry.SecretIDTTL < time.Duration(0) || secretIDEntry.SecretIDTTL > b.System().MaxLeaseTTL() {
-		secretIDEntry.ExpirationTime = currentTime.Add(b.System().MaxLeaseTTL())
-	} else if secretIDEntry.SecretIDTTL != time.Duration(0) {
+	if secretEntry.SecretIDTTL < time.Duration(0) || secretEntry.SecretIDTTL > b.System().MaxLeaseTTL() {
+		secretEntry.ExpirationTime = currentTime.Add(b.System().MaxLeaseTTL())
+	} else if secretEntry.SecretIDTTL != time.Duration(0) {
 		// Set the ExpirationTime only if SecretIDTTL was set. SecretIDs should not
 		// expire by default.
-		secretIDEntry.ExpirationTime = currentTime.Add(secretIDEntry.SecretIDTTL)
+		secretEntry.ExpirationTime = currentTime.Add(secretEntry.SecretIDTTL)
 	}
 
-	if entry, err := logical.StorageEntryJSON(entryIndex, secretIDEntry); err != nil {
+	if entry, err := logical.StorageEntryJSON(entryIndex, secretEntry); err != nil {
 		return err
 	} else if err = s.Put(entry); err != nil {
 		return err

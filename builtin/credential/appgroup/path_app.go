@@ -242,7 +242,7 @@ func appPaths(b *backend) []*framework.Path {
 			HelpDescription: strings.TrimSpace(appHelp["app-selector-id"][1]),
 		},
 		&framework.Path{
-			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id$",
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id/?$",
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -251,9 +251,29 @@ func appPaths(b *backend) []*framework.Path {
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
 				logical.ReadOperation: b.pathAppSecretIDRead,
+				logical.ListOperation: b.pathAppSecretIDList,
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-secret-id"][1]),
+		},
+		&framework.Path{
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id/" + framework.GenericNameRegex("secret_id_hmac"),
+			Fields: map[string]*framework.FieldSchema{
+				"app_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the App.",
+				},
+				"secret_id_hmac": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "HMAC of the secret ID",
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.ReadOperation:   b.pathAppSecretIDHMACRead,
+				logical.DeleteOperation: b.pathAppSecretIDHMACDelete,
+			},
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id-hmac"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-hmac"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/custom-secret-id$",
@@ -297,6 +317,34 @@ func (b *backend) pathAppList(
 		return nil, err
 	}
 	return logical.ListResponse(apps), nil
+}
+
+// pathAppSecretIDList is used to list all the Apps registered with the backend.
+func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return logical.ErrorResponse(fmt.Sprintf("app %s does not exist", appName)), nil
+	}
+
+	// Get the "custom" lock
+	lock := b.secretIDLock("")
+	lock.RLock()
+	defer lock.RUnlock()
+
+	secrets, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
+	if err != nil {
+		return nil, err
+	}
+
+	return logical.ListResponse(secrets), nil
 }
 
 // setAppEntry grabs a write lock and stores the options on an App into the storage
@@ -489,6 +537,74 @@ func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framewor
 	} else {
 		return logical.ErrorResponse("missing bind_secret_id"), nil
 	}
+}
+
+func (b *backend) pathAppSecretIDHMACRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	hashedSecretID := data.Get("secret_id_hmac").(string)
+	if hashedSecretID == "" {
+		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, fmt.Errorf("app %s does not exist", appName)
+	}
+
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+
+	lock := b.secretIDLock(hashedSecretID)
+	lock.RLock()
+	defer lock.RUnlock()
+
+	result := secretIDStorageEntry{}
+	if entry, err := req.Storage.Get(entryIndex); err != nil {
+		return nil, err
+	} else if entry == nil {
+		return nil, nil
+	} else if err := entry.DecodeJSON(&result); err != nil {
+		return nil, err
+	}
+
+	respData := structs.New(result).Map()
+	return &logical.Response{
+		Data: respData,
+	}, nil
+}
+
+func (b *backend) pathAppSecretIDHMACDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	hashedSecretID := data.Get("secret_id_hmac").(string)
+	if hashedSecretID == "" {
+		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, fmt.Errorf("app %s does not exist", appName)
+	}
+
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+
+	lock := b.secretIDLock(hashedSecretID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	return nil, req.Storage.Delete(entryIndex)
 }
 
 func (b *backend) pathAppBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -954,6 +1070,15 @@ this option.`,
 that are generated against the App using 'app/<app_name>/secret-id' or
 'app/<app_name>/custom-secret-id' endpoints.`,
 		``,
+	},
+	"app-secret-id-hmac": {
+		"Read or delete a issued secret_id",
+		`This is particularly useful to clean-up the non-expiring 'secret_id's.
+The list operation on the 'app/<app_name>/secret-id' endpoint will return
+the HMACed 'secret_id's. This endpoint can be used to read the properties
+of the secret. If the 'secret_idnum_uses' field in the response is 0, it represents
+a non-expiring 'secret_id'. The same endpoint can be invoked again to delete
+it.`,
 	},
 	"app-token-ttl": {
 		`Duration in seconds, the lifetime of the token issued by using the SecretID that
