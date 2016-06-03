@@ -1,6 +1,7 @@
 package appgroup
 
 import (
+	"log"
 	"testing"
 
 	"github.com/hashicorp/vault/helper/policies"
@@ -21,6 +22,8 @@ func TestBackend_supergroup_login(t *testing.T) {
 	createGroup(t, b, storage, "group1", "app3,app4", "m,n")
 	createGroup(t, b, storage, "group2", "app5,app6", "o,p")
 	createGroup(t, b, storage, "group3", "app3,app4,app5,app6", "q,r")
+
+	log.Printf("creating super group now\n")
 
 	superGroupSecretIDData := map[string]interface{}{
 		"groups":              "group1,group2,group3",
@@ -45,9 +48,10 @@ func TestBackend_supergroup_login(t *testing.T) {
 	}
 
 	loginData := map[string]interface{}{
-		"selector":  selectorTypeSuperGroup,
-		"secret_id": resp.Data["secret_id"],
+		"selector_id": resp.Data["selector_id"],
+		"secret_id":   resp.Data["secret_id"],
 	}
+	log.Printf("loginData: %#v\n", loginData)
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,
 		Path:      "login",
@@ -76,6 +80,16 @@ func TestBackend_group_login(t *testing.T) {
 	createApp(t, b, storage, "app1", "a,b")
 	createApp(t, b, storage, "app2", "c,d")
 	createGroup(t, b, storage, "group1", "app1,app2", "e,f")
+	groupSelectorIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "group/group1/selector-id",
+		Storage:   storage,
+	}
+	resp, err = b.HandleRequest(groupSelectorIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	selectorID := resp.Data["selector_id"]
 
 	groupSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -86,10 +100,11 @@ func TestBackend_group_login(t *testing.T) {
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
+	secretID := resp.Data["secret_id"]
 
 	loginData := map[string]interface{}{
-		"selector":  "group/group1",
-		"secret_id": resp.Data["secret_id"],
+		"selector_id": selectorID,
+		"secret_id":   secretID,
 	}
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,
@@ -118,6 +133,16 @@ func TestBackend_app_login(t *testing.T) {
 	b, storage := createBackendWithStorage(t)
 
 	createApp(t, b, storage, "app1", "a,b,c")
+	appSelectorIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Path:      "app/app1/selector-id",
+		Storage:   storage,
+	}
+	resp, err = b.HandleRequest(appSelectorIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	selectorID := resp.Data["selector_id"]
 
 	appSecretIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -128,10 +153,11 @@ func TestBackend_app_login(t *testing.T) {
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
+	secretID := resp.Data["secret_id"]
 
 	loginData := map[string]interface{}{
-		"selector":  "app/app1",
-		"secret_id": resp.Data["secret_id"],
+		"selector_id": selectorID,
+		"secret_id":   secretID,
 	}
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,

@@ -3,7 +3,6 @@ package appgroup
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fatih/structs"
@@ -12,29 +11,6 @@ import (
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 )
-
-// selectorStorageEntry represents the reverse mapping of the selector to
-// the respective app or group that the selectorID belongs to.
-type selectorStorageEntry struct {
-	// Type of selector: "app", "group", "supergroup"
-	Type string `json:"type" structs:"type" mapstructure:"type"`
-
-	// Name of the app, group or supergroup, depending on the type
-	Name string `json:"name" structs:"name" mapstructure:"name"`
-}
-
-func (b *backend) getSelectorIDLock(selectorID string) *sync.RWMutex {
-	var lock *sync.RWMutex
-	var ok bool
-	if len(selectorID) >= 2 {
-		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
-	}
-	if !ok || lock == nil {
-		// Fall back for custom secret IDs
-		lock = b.selectorIDLocksMap["custom"]
-	}
-	return lock
-}
 
 // appStorageEntry stores all the options that are set on an App
 type appStorageEntry struct {
@@ -326,6 +302,7 @@ func (b *backend) pathAppList(
 // setAppEntry grabs a write lock and stores the options on an App into the storage
 func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorageEntry) error {
 	b.appLock.Lock()
+	defer b.appLock.Unlock()
 
 	entry, err := logical.StorageEntryJSON("app/"+strings.ToLower(appName), app)
 	if err != nil {
@@ -335,22 +312,10 @@ func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorage
 		return err
 	}
 
-	b.appLock.Unlock()
-	lock := b.getSelectorIDLock(app.SelectorID)
-	lock.Lock()
-	defer lock.Unlock()
-
-	entry, err = logical.StorageEntryJSON("selector/"+app.SelectorID, &selectorStorageEntry{
+	return b.setSelectorIDEntry(s, app.SelectorID, &selectorIDStorageEntry{
 		Type: selectorTypeApp,
 		Name: appName,
 	})
-	if err != nil {
-		return err
-	}
-	if err = s.Put(entry); err != nil {
-		return s.Put(entry)
-	}
-	return nil
 }
 
 // appEntry grabs the read lock and fetches the options of an App from the storage
@@ -935,7 +900,7 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 		return logical.ErrorResponse("bind_secret_id is not set on the app"), nil
 	}
 
-	if err = b.registerSecretIDEntry(req.Storage, selectorTypeApp, appName, secretID, &secretIDStorageEntry{
+	if err = b.registerSecretIDEntry(req.Storage, app.SelectorID, secretID, app.HMACKey, &secretIDStorageEntry{
 		SecretIDNumUses: app.SecretIDNumUses,
 		SecretIDTTL:     app.SecretIDTTL,
 	}); err != nil {

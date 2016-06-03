@@ -41,7 +41,7 @@ func Factory(conf *logical.BackendConfig) (logical.Backend, error) {
 	return b.Setup(conf)
 }
 
-func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
+func Backend(conf *logical.BackendConfig) (*backend, error) {
 	// Initialize the salt
 	salt, err := salt.NewSalt(conf.StorageView, &salt.Config{
 		HashFunc: salt.SHA256Hash,
@@ -104,7 +104,7 @@ func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
 			},
 		),
 	}
-	return b.Backend, nil
+	return b, nil
 }
 
 // periodicFunc of the backend will be invoked once a minute by the RollbackManager.
@@ -114,7 +114,7 @@ func Backend(conf *logical.BackendConfig) (*framework.Backend, error) {
 // to delay the removal of SecretIDs by a minute.
 func (b *backend) periodicFunc(req *logical.Request) error {
 	// Initiate clean-up of expired SecretID entries
-	b.tidySecretID(req.Storage)
+	//b.tidySecretID(req.Storage)
 	return nil
 }
 

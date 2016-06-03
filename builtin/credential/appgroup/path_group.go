@@ -117,6 +117,7 @@ addition to those, a set of policies can be assigned using this.
 				logical.ReadOperation:   b.pathGroupRead,
 				logical.DeleteOperation: b.pathGroupDelete,
 			},
+			ExistenceCheck:  b.pathGroupExistenceCheck,
 			HelpSynopsis:    strings.TrimSpace(groupHelp["group"][0]),
 			HelpDescription: strings.TrimSpace(groupHelp["group"][1]),
 		},
@@ -340,6 +341,7 @@ func (b *backend) pathGroupList(
 // setAppEntry grabs a write lock and stores the options on a Group into the storage
 func (b *backend) setGroupEntry(s logical.Storage, groupName string, group *groupStorageEntry) error {
 	b.groupLock.Lock()
+	defer b.groupLock.Unlock()
 
 	entry, err := logical.StorageEntryJSON("group/"+strings.ToLower(groupName), group)
 	if err != nil {
@@ -349,22 +351,10 @@ func (b *backend) setGroupEntry(s logical.Storage, groupName string, group *grou
 		return err
 	}
 
-	b.groupLock.Unlock()
-	lock := b.getSelectorIDLock(group.SelectorID)
-	lock.Lock()
-	defer lock.Unlock()
-
-	entry, err = logical.StorageEntryJSON("selector/"+group.SelectorID, &selectorStorageEntry{
-		Type: selectorTypeApp,
+	return b.setSelectorIDEntry(s, group.SelectorID, &selectorIDStorageEntry{
+		Type: selectorTypeGroup,
 		Name: groupName,
 	})
-	if err != nil {
-		return err
-	}
-	if err = s.Put(entry); err != nil {
-		return s.Put(entry)
-	}
-	return nil
 }
 
 // groupEntry grabs the read lock and fetches the options of an Group from the storage
@@ -999,7 +989,7 @@ func (b *backend) handleGroupSecretIDCommon(req *logical.Request, data *framewor
 		return logical.ErrorResponse("bind_secret_id is not set on the group"), nil
 	}
 
-	if err = b.registerSecretIDEntry(req.Storage, selectorTypeGroup, groupName, secretID, &secretIDStorageEntry{
+	if err = b.registerSecretIDEntry(req.Storage, group.SelectorID, secretID, group.HMACKey, &secretIDStorageEntry{
 		SecretIDNumUses: group.SecretIDNumUses,
 		SecretIDTTL:     group.SecretIDTTL,
 	}); err != nil {

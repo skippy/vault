@@ -12,7 +12,7 @@ func pathLogin(b *backend) *framework.Path {
 	return &framework.Path{
 		Pattern: "login$",
 		Fields: map[string]*framework.FieldSchema{
-			"selector": &framework.FieldSchema{
+			"selector_id": &framework.FieldSchema{
 				Type:        framework.TypeString,
 				Description: "Identifier of the category the SecretID belongs to.",
 			},
@@ -51,31 +51,28 @@ func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldDat
 	}
 
 	// Selector can optionally be prepended to the SecretID with a `;` delimiter
-	selector := strings.TrimSpace(data.Get("selector").(string))
-	if selector == "" {
+	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
+	if selectorID == "" {
 		selectorFields := strings.SplitN(secretID, ";", 2)
 		if len(selectorFields) != 2 || selectorFields[0] == "" {
-			return logical.ErrorResponse("missing selector"), nil
+			return logical.ErrorResponse("missing selector_id"), nil
 		} else if selectorFields[1] == "" {
 			return logical.ErrorResponse("missing secret_id"), nil
 		} else {
-			selector = selectorFields[0]
+			selectorID = selectorFields[0]
 			secretID = selectorFields[1]
 		}
 	}
 
-	validateResp, err := b.validateCredentials(req.Storage, selector, secretID)
+	validateResp, err := b.validateCredentials(req.Storage, selectorID, secretID)
 	if err != nil {
 		return logical.ErrorResponse(fmt.Sprintf("failed to validate secret ID: %s", err)), nil
 	}
 
 	resp := &logical.Response{
 		Auth: &logical.Auth{
-			InternalData: map[string]interface{}{
-				"selector_type":  validateResp.SelectorType,
-				"selector_value": validateResp.SelectorValue,
-			},
-			Policies: validateResp.Policies,
+			InternalData: map[string]interface{}{},
+			Policies:     validateResp.Policies,
 			LeaseOptions: logical.LeaseOptions{
 				TTL:       validateResp.TokenTTL,
 				Renewable: true,

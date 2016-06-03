@@ -1,8 +1,10 @@
 package appgroup
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,61 +45,105 @@ type secretIDStorageEntry struct {
 // required to be stored as metadata in the response, and/or the information required to
 // create the client token.
 type validationResponse struct {
-	SelectorType  string        `json:"selector_type" structs:"selector_type" mapstructure:"selector_type"`
+	SelectorID    string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+	HMACKey       string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
 	SelectorValue string        `json:"selector_value" structs:"selector_value" mapstructure:"selector_value"`
 	TokenTTL      time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
 	TokenMaxTTL   time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
 	Policies      []string      `json:"policies" structs:"policies" mapstructure:"policies"`
 }
 
+// selectorStorageEntry represents the reverse mapping of the selector to
+// the respective app or group that the selectorID belongs to.
+type selectorIDStorageEntry struct {
+	// Type of selector: "app", "group", "supergroup"
+	Type string `json:"type" structs:"type" mapstructure:"type"`
+
+	// Name of the app, group or supergroup, depending on the type
+	Name string `json:"name" structs:"name" mapstructure:"name"`
+}
+
+func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
+	var lock *sync.RWMutex
+	var ok bool
+	if len(selectorID) >= 2 {
+		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
+	}
+	if !ok || lock == nil {
+		// Fall back for custom secret IDs
+		lock = b.selectorIDLocksMap["custom"]
+	}
+	return lock
+}
+
+func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selectorEntry *selectorIDStorageEntry) error {
+	lock := b.selectorIDLock(selectorID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	entry, err := logical.StorageEntryJSON("selector/"+selectorID, selectorEntry)
+	if err != nil {
+		return err
+	}
+	if err = s.Put(entry); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*selectorIDStorageEntry, error) {
+	if selectorID == "" {
+		return nil, fmt.Errorf("missing selectorID")
+	}
+
+	lock := b.selectorIDLock(selectorID)
+	lock.RLock()
+	defer lock.RUnlock()
+
+	var result selectorIDStorageEntry
+
+	if entry, err := s.Get("selector/" + selectorID); err != nil {
+		return nil, err
+	} else if entry == nil {
+		return nil, nil
+	} else if err := entry.DecodeJSON(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 // Identifies the supplied selector and validates it, checks if the supplied secret ID
 // has a corresponding entry in the backend and udpates the use count if needed.
-func (b *backend) validateCredentials(s logical.Storage, selector, secretID string) (*validationResponse, error) {
-	if selector == "" {
-		return nil, fmt.Errorf("missing selector")
+func (b *backend) validateCredentials(s logical.Storage, selectorID, secretID string) (*validationResponse, error) {
+	if selectorID == "" {
+		return nil, fmt.Errorf("missing selector_id")
 	}
 	if secretID == "" {
-		return nil, fmt.Errorf("missing secretID")
+		return nil, fmt.Errorf("missing secret_id")
 	}
 
-	// From the selector field supplied as the credential, detect the type of SecretID
-	// supplied. SecretID will be verified based on the type.
-	selectorType := ""
-	selectorValue := ""
-	switch {
-	case selector == selectorTypeSuperGroup:
-		selectorType = selectorTypeSuperGroup
-		selectorValue = b.salt.SaltID(secretID)
-	case strings.HasPrefix(selector, "app/") || strings.HasPrefix(selector, "group/"):
-		selectorFields := strings.SplitN(selector, "/", 2)
-		if len(selectorFields) != 2 {
-			return nil, fmt.Errorf("invalid selector; selector type and value could not be parsed")
-		}
-		selectorType = strings.TrimSpace(selectorFields[0])
-		selectorValue = strings.TrimSpace(selectorFields[1])
-		if selectorValue == "" {
-			return nil, fmt.Errorf("missing selector value")
-		}
-	default:
-		return nil, fmt.Errorf("unrecognized selector")
+	selIDEntry, err := b.selectorIDEntry(s, selectorID)
+	if err != nil {
+		return nil, err
+	}
+	if selIDEntry == nil {
+		return nil, fmt.Errorf("invalid selector_id")
 	}
 
-	// Do the selector validation first. If this results in an error, the SecretID
-	// entry should not be modified. Return the validation response if the SecretID
-	// is found to be valid and if the SecretID entry is updated properly.
-	validationResp, err := b.validateSelector(s, selectorType, selectorValue)
+	validationResp, err := b.validateSelector(s, selIDEntry.Type, selIDEntry.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if the secret ID supplied is valid. If use limit was specified
 	// on the secret ID, it will be decremented in this call.
-	valid, err := b.secretIDEntryValid(s, selectorType, selectorValue, secretID)
+	valid, err := b.secretIDEntryValid(s, selectorID, secretID, validationResp.HMACKey)
 	if err != nil {
 		return nil, err
 	}
 	if !valid {
-		return nil, fmt.Errorf("secret ID not found under the %s selector type", selectorType)
+		return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
 	}
 
 	return validationResp, nil
@@ -105,10 +151,7 @@ func (b *backend) validateCredentials(s logical.Storage, selector, secretID stri
 
 // Check if there exists an entry in the name of selectorValue for the selectorType supplied.
 func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValue string) (*validationResponse, error) {
-	resp := &validationResponse{
-		SelectorType:  selectorType,
-		SelectorValue: selectorValue,
-	}
+	resp := &validationResponse{}
 	switch selectorType {
 	case selectorTypeApp:
 		app, err := b.appEntry(s, selectorValue)
@@ -121,6 +164,8 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 		resp.Policies = app.Policies
 		resp.TokenTTL = app.TokenTTL
 		resp.TokenMaxTTL = app.TokenMaxTTL
+		resp.SelectorID = app.SelectorID
+		resp.HMACKey = app.HMACKey
 	case selectorTypeGroup:
 		group, err := b.groupEntry(s, selectorValue)
 		if err != nil {
@@ -141,6 +186,8 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 
 		resp.TokenTTL = group.TokenTTL
 		resp.TokenMaxTTL = group.TokenMaxTTL
+		resp.SelectorID = group.SelectorID
+		resp.HMACKey = group.HMACKey
 	case selectorTypeSuperGroup:
 		superGroup, err := b.superGroupEntry(s, selectorValue)
 		if err != nil {
@@ -178,6 +225,8 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 
 		resp.TokenTTL = superGroup.TokenTTL
 		resp.TokenMaxTTL = superGroup.TokenMaxTTL
+		resp.SelectorID = superGroup.SelectorID
+		resp.HMACKey = superGroup.HMACKey
 	default:
 		return nil, fmt.Errorf("unknown selector type")
 	}
@@ -201,12 +250,14 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 // backend, then there will be no collision between the SecretIDs from different
 // types. But, if same specific SecretIDs are assigned across different selector
 // types, then it should be supported.
-func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorValue, secretID string) (bool, error) {
-	// Prepare the storage index for the secretID
-	entryIndex := fmt.Sprintf("secret_id/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(secretID)))
-	// Acquire a lock to read/write secretID
-	lock := b.getSecretIDLock(secretID)
+func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
+	hashedSecretID, err := createHMAC(hmacKey, secretID)
+	if err != nil {
+		return false, fmt.Errorf("failed to create HMAC of secret_id: %s", err)
+	}
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
+	lock := b.getSecretIDLock(secretID)
 	lock.RLock()
 
 	result := secretIDStorageEntry{}
@@ -259,11 +310,13 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorVa
 		// and it is not cleaned up in any other way. When the SecretID belonging
 		// to the superGroup storage entry is getting invalidated, the entry should
 		// be deleted as well.
-		if selectorType == selectorTypeSuperGroup {
-			if err := b.deleteSuperGroupEntry(s, selectorValue); err != nil {
-				return false, err
+		/*
+			if selectorType == selectorTypeSuperGroup {
+				if err := b.deleteSuperGroupEntry(s, selectorValue); err != nil {
+					return false, err
+				}
 			}
-		}
+		*/
 	} else {
 		// If the use count is greater than one, decrement it and update the last updated time.
 		result.SecretIDNumUses -= 1
@@ -291,21 +344,31 @@ func (b *backend) getSecretIDLock(secretID string) *sync.RWMutex {
 	return lock
 }
 
+// Creates HMAC using a per-role key.
+func createHMAC(key, value string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("invalid HMAC key")
+	}
+	hm := hmac.New(sha256.New, []byte(key))
+	hm.Write([]byte(value))
+	return hex.EncodeToString(hm.Sum(nil)), nil
+}
+
 // registerSecretIDEntry creates a new storage entry for the given SecretID.
 // Successful creation of the storage entry results in the creation of a
 // lock in the map of locks maintained at the backend. The index into the
 // map is the SecretID itself. During login, if the SecretID supplied is not
 // having a corresponding lock in the map, the login attempt fails.
-func (b *backend) registerSecretIDEntry(s logical.Storage, selectorType, selectorValue, secretID string, secretIDEntry *secretIDStorageEntry) error {
+func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretIDEntry *secretIDStorageEntry) error {
+	hashedSecretID, err := createHMAC(hmacKey, secretID)
+	if err != nil {
+		return fmt.Errorf("failed to create HMAC of secret_id: %s", err)
+	}
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
-	// Prepare the storage index for the secretID
-	entryIndex := fmt.Sprintf("secret_id/%s/%s/%s", selectorType, selectorValue, b.salt.SaltID(strings.ToLower(secretID)))
-
-	// Acquire a lock to read/write secretID
 	lock := b.getSecretIDLock(secretID)
-
-	// See if there is already an entry for the given SecretID
 	lock.RLock()
+
 	entry, err := s.Get(entryIndex)
 	if err != nil {
 		lock.RUnlock()
@@ -317,12 +380,12 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorType, selecto
 	}
 
 	// If there isn't an entry for the secretID already, switch the read lock
-	// with a write lock and create an entry. But before saving a new entry,
-	// check if the secretID entry was created during the lock switch.
+	// with a write lock and create an entry.
 	lock.RUnlock()
 	lock.Lock()
 	defer lock.Unlock()
 
+	// But before saving a new entry, check if the secretID entry was created during the lock switch.
 	entry, err = s.Get(entryIndex)
 	if err != nil {
 		return err
@@ -331,7 +394,7 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorType, selecto
 		return fmt.Errorf("secret ID is already registered")
 	}
 
-	// SecretID was not created during the lock switch. Create a new entry.
+	// Create a new entry for the SecretID
 
 	// Set the creation time for the SecretID
 	currentTime := time.Now().UTC()

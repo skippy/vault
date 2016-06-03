@@ -161,11 +161,18 @@ addition to those, a set of policies can be assigned using this.
 func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, superGroup *superGroupStorageEntry) error {
 	b.superGroupLock.Lock()
 	defer b.superGroupLock.Unlock()
-	if entry, err := logical.StorageEntryJSON("supergroup/"+strings.ToLower(superGroupName), superGroup); err != nil {
+	entry, err := logical.StorageEntryJSON("supergroup/"+strings.ToLower(superGroupName), superGroup)
+	if err != nil {
 		return err
-	} else {
-		return s.Put(entry)
 	}
+	if err = s.Put(entry); err != nil {
+		return err
+	}
+
+	return b.setSelectorIDEntry(s, superGroup.SelectorID, &selectorIDStorageEntry{
+		Type: selectorTypeSuperGroup,
+		Name: superGroupName,
+	})
 }
 
 func (b *backend) deleteSuperGroupEntry(s logical.Storage, superGroupName string) error {
@@ -261,7 +268,7 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return logical.ErrorResponse("bind_secret_id is not set"), nil
 	}
 
-	if err := b.registerSecretIDEntry(req.Storage, selectorTypeSuperGroup, superGroupName, secretID, &secretIDStorageEntry{
+	if err := b.registerSecretIDEntry(req.Storage, selectorID, secretID, hmacKey, &secretIDStorageEntry{
 		SecretIDNumUses: superGroup.SecretIDNumUses,
 		SecretIDTTL:     superGroup.SecretIDTTL,
 	}); err != nil {
