@@ -53,16 +53,24 @@ func createBackend(conf *logical.BackendConfig) (*backend, error) {
 		// Create the lock for making changes to the storage entries of "supergroup" mode
 		superGroupLock: &sync.RWMutex{},
 
-		// Create the map of locks to hold locks that are used to modify the created
-		// SecretIDs.
+		// Create the map of locks to modify the generated SelectorIDs.
+		selectorIDLocksMap: map[string]*sync.RWMutex{},
+
+		// Create the map of locks to modify the generated SecretIDs.
 		secretIDLocksMap: map[string]*sync.RWMutex{},
 	}
 
 	for i := int64(0); i < 256; i++ {
-		b.secretIDLocksMap[fmt.Sprintf("%2x",
-			strconv.FormatInt(i, 16))] = &sync.RWMutex{}
+		b.selectorIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
+		b.secretIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
 	}
 	b.secretIDLocksMap["custom"] = &sync.RWMutex{}
+
+	// Ideally, "custom" entry is not required for selectorIDLocksMap since
+	// selectorID is always generated internally and is a UUID. But having
+	// one is safe. The getter method for lock will never be nil if it can
+	// always fallback on the "custom" lock.
+	b.selectorIDLocksMap["custom"] = &sync.RWMutex{}
 
 	// Attach the paths and secrets that are to be handled by the backend
 	b.Backend = &framework.Backend{

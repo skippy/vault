@@ -18,6 +18,9 @@ type groupStorageEntry struct {
 	// UUID that uniquely represents this Group
 	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
 
+	// UUID that serves as the HMAC key for the hashing the 'secret_id's of the App
+	HMACKey string `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
+
 	// All the participating Apps of the Group
 	Apps []string `json:"apps" structs:"apps" mapstructure:"apps"`
 
@@ -337,13 +340,31 @@ func (b *backend) pathGroupList(
 // setAppEntry grabs a write lock and stores the options on a Group into the storage
 func (b *backend) setGroupEntry(s logical.Storage, groupName string, group *groupStorageEntry) error {
 	b.groupLock.Lock()
-	defer b.groupLock.Unlock()
 
-	if entry, err := logical.StorageEntryJSON("group/"+strings.ToLower(groupName), group); err != nil {
+	entry, err := logical.StorageEntryJSON("group/"+strings.ToLower(groupName), group)
+	if err != nil {
 		return err
-	} else {
+	}
+	if err = s.Put(entry); err != nil {
+		return err
+	}
+
+	b.groupLock.Unlock()
+	lock := b.getSelectorIDLock(group.SelectorID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	entry, err = logical.StorageEntryJSON("selector/"+group.SelectorID, &selectorStorageEntry{
+		Type: selectorTypeApp,
+		Name: groupName,
+	})
+	if err != nil {
+		return err
+	}
+	if err = s.Put(entry); err != nil {
 		return s.Put(entry)
 	}
+	return nil
 }
 
 // groupEntry grabs the read lock and fetches the options of an Group from the storage
@@ -385,8 +406,13 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		if err != nil {
 			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
 		}
+		hmacKey, err := uuid.GenerateUUID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+		}
 		group = &groupStorageEntry{
 			SelectorID: selectorID,
+			HMACKey:    hmacKey,
 		}
 	}
 
@@ -464,6 +490,7 @@ func (b *backend) pathGroupRead(req *logical.Request, data *framework.FieldData)
 		// Create a map of data to be returned and remove sensitive information from it
 		data := structs.New(group).Map()
 		delete(data, "selector_id")
+		delete(data, "hmac_key")
 
 		return &logical.Response{
 			Data: data,
@@ -480,7 +507,11 @@ func (b *backend) pathGroupDelete(req *logical.Request, data *framework.FieldDat
 	b.groupLock.Lock()
 	defer b.groupLock.Unlock()
 
-	return nil, req.Storage.Delete("group/" + strings.ToLower(groupName))
+	if err := req.Storage.Delete("group/" + strings.ToLower(groupName)); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (b *backend) pathGroupAppsUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

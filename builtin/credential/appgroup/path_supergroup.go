@@ -18,6 +18,9 @@ type superGroupStorageEntry struct {
 	// UUID that uniquely represents this supergroup
 	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
 
+	// UUID that serves as the HMAC key for the hashing the 'secret_id's of the App
+	HMACKey string `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
+
 	// All the Groups that are to be accessible by the SecretID created
 	Groups []string `json:"groups" structs:"groups" mapstructure:"groups"`
 
@@ -213,8 +216,13 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 	if err != nil {
 		return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
 	}
+	hmacKey, err := uuid.GenerateUUID()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+	}
 	superGroup := &superGroupStorageEntry{
 		SelectorID:         selectorID,
+		HMACKey:            hmacKey,
 		Groups:             strutil.ParseStrings(data.Get("groups").(string)),
 		Apps:               strutil.ParseStrings(data.Get("apps").(string)),
 		BindSecretID:       data.Get("bind_secret_id").(bool),

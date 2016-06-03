@@ -3,6 +3,7 @@ package appgroup
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/structs"
@@ -12,10 +13,36 @@ import (
 	"github.com/hashicorp/vault/logical/framework"
 )
 
+// selectorStorageEntry represents the reverse mapping of the selector to
+// the respective app or group that the selectorID belongs to.
+type selectorStorageEntry struct {
+	// Type of selector: "app", "group", "supergroup"
+	Type string `json:"type" structs:"type" mapstructure:"type"`
+
+	// Name of the app, group or supergroup, depending on the type
+	Name string `json:"name" structs:"name" mapstructure:"name"`
+}
+
+func (b *backend) getSelectorIDLock(selectorID string) *sync.RWMutex {
+	var lock *sync.RWMutex
+	var ok bool
+	if len(selectorID) >= 2 {
+		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
+	}
+	if !ok || lock == nil {
+		// Fall back for custom secret IDs
+		lock = b.selectorIDLocksMap["custom"]
+	}
+	return lock
+}
+
 // appStorageEntry stores all the options that are set on an App
 type appStorageEntry struct {
 	// UUID that uniquely represents this App
 	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+
+	// UUID that serves as the HMAC key for the hashing the 'secret_id's of the App
+	HMACKey string `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
 
 	// Policies that are to be required by the token to access the App
 	Policies []string `json:"policies" structs:"policies" mapstructure:"policies"`
@@ -299,12 +326,31 @@ func (b *backend) pathAppList(
 // setAppEntry grabs a write lock and stores the options on an App into the storage
 func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorageEntry) error {
 	b.appLock.Lock()
-	defer b.appLock.Unlock()
-	if entry, err := logical.StorageEntryJSON("app/"+strings.ToLower(appName), app); err != nil {
+
+	entry, err := logical.StorageEntryJSON("app/"+strings.ToLower(appName), app)
+	if err != nil {
 		return err
-	} else {
+	}
+	if err = s.Put(entry); err != nil {
+		return err
+	}
+
+	b.appLock.Unlock()
+	lock := b.getSelectorIDLock(app.SelectorID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	entry, err = logical.StorageEntryJSON("selector/"+app.SelectorID, &selectorStorageEntry{
+		Type: selectorTypeApp,
+		Name: appName,
+	})
+	if err != nil {
+		return err
+	}
+	if err = s.Put(entry); err != nil {
 		return s.Put(entry)
 	}
+	return nil
 }
 
 // appEntry grabs the read lock and fetches the options of an App from the storage
@@ -348,8 +394,13 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		if err != nil {
 			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
 		}
+		hmacKey, err := uuid.GenerateUUID()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+		}
 		app = &appStorageEntry{
 			SelectorID: selectorID,
+			HMACKey:    hmacKey,
 		}
 	}
 
@@ -429,6 +480,7 @@ func (b *backend) pathAppRead(req *logical.Request, data *framework.FieldData) (
 		// Create a map of data to be returned and remove sensitive information from it
 		data := structs.New(app).Map()
 		delete(data, "selector_id")
+		delete(data, "hmac_key")
 
 		return &logical.Response{
 			Data: data,
@@ -445,7 +497,11 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	b.appLock.Lock()
 	defer b.appLock.Unlock()
 
-	return nil, req.Storage.Delete("app/" + strings.ToLower(appName))
+	if err := req.Storage.Delete("app/" + strings.ToLower(appName)); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

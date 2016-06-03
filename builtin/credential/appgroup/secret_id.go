@@ -279,7 +279,6 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorType, selectorVa
 }
 
 func (b *backend) getSecretIDLock(secretID string) *sync.RWMutex {
-	// Find our multilevel lock, or fall back to global
 	var lock *sync.RWMutex
 	var ok bool
 	if len(secretID) >= 2 {
@@ -289,7 +288,6 @@ func (b *backend) getSecretIDLock(secretID string) *sync.RWMutex {
 		// Fall back for custom secret IDs
 		lock = b.secretIDLocksMap["custom"]
 	}
-
 	return lock
 }
 
