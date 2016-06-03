@@ -2,6 +2,7 @@ package appgroup
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -161,6 +162,7 @@ addition to those, a set of policies can be assigned using this.
 func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, superGroup *superGroupStorageEntry) error {
 	b.superGroupLock.Lock()
 	defer b.superGroupLock.Unlock()
+	log.Printf("reading supergroup: %s\n", superGroupName)
 	entry, err := logical.StorageEntryJSON("supergroup/"+strings.ToLower(superGroupName), superGroup)
 	if err != nil {
 		return err
@@ -195,6 +197,7 @@ func (b *backend) superGroupEntry(s logical.Storage, superGroupName string) (*su
 	b.superGroupLock.RLock()
 	defer b.superGroupLock.RUnlock()
 
+	log.Printf("reading supergroup: %s\n", superGroupName)
 	if entry, err := s.Get("supergroup/" + strings.ToLower(superGroupName)); err != nil {
 		return nil, err
 	} else if entry == nil {

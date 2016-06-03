@@ -30,20 +30,6 @@ func pathLogin(b *backend) *framework.Path {
 	}
 }
 
-func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	selectorType := req.Auth.InternalData["selector_type"].(string)
-	selectorValue := req.Auth.InternalData["selector_value"].(string)
-	if selectorType == "" || selectorValue == "" {
-		return nil, fmt.Errorf("failed to fetch selector type and/or selector value during renewal")
-	}
-	resp, err := b.validateSelector(req.Storage, selectorType, selectorValue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate selector during renewal:%s", err)
-	}
-
-	return framework.LeaseExtend(resp.TokenTTL, resp.TokenMaxTTL, b.System())(req, data)
-}
-
 func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID := strings.TrimSpace(data.Get("secret_id").(string))
 	if secretID == "" {
@@ -71,8 +57,10 @@ func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldDat
 
 	resp := &logical.Response{
 		Auth: &logical.Auth{
-			InternalData: map[string]interface{}{},
-			Policies:     validateResp.Policies,
+			InternalData: map[string]interface{}{
+				"selector_id": validateResp.SelectorID,
+			},
+			Policies: validateResp.Policies,
 			LeaseOptions: logical.LeaseOptions{
 				TTL:       validateResp.TokenTTL,
 				Renewable: true,
@@ -80,6 +68,20 @@ func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldDat
 		},
 	}
 	return resp, nil
+}
+
+func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	selectorID := req.Auth.InternalData["selector_id"].(string)
+	if selectorID == "" {
+		return nil, fmt.Errorf("failed to fetch selector_id during renewal")
+	}
+
+	resp, err := b.validateSelectorID(req.Storage, selectorID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate selector during renewal:%s", err)
+	}
+
+	return framework.LeaseExtend(resp.TokenTTL, resp.TokenMaxTTL, b.System())(req, data)
 }
 
 const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'secret_id'."

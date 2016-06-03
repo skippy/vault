@@ -1,7 +1,6 @@
 package appgroup
 
 import (
-	"log"
 	"testing"
 
 	"github.com/hashicorp/vault/helper/policies"
@@ -22,8 +21,6 @@ func TestBackend_supergroup_login(t *testing.T) {
 	createGroup(t, b, storage, "group1", "app3,app4", "m,n")
 	createGroup(t, b, storage, "group2", "app5,app6", "o,p")
 	createGroup(t, b, storage, "group3", "app3,app4,app5,app6", "q,r")
-
-	log.Printf("creating super group now\n")
 
 	superGroupSecretIDData := map[string]interface{}{
 		"groups":              "group1,group2,group3",
@@ -51,7 +48,6 @@ func TestBackend_supergroup_login(t *testing.T) {
 		"selector_id": resp.Data["selector_id"],
 		"secret_id":   resp.Data["secret_id"],
 	}
-	log.Printf("loginData: %#v\n", loginData)
 	loginReq := &logical.Request{
 		Operation: logical.UpdateOperation,
 		Path:      "login",

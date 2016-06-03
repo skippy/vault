@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -45,12 +46,11 @@ type secretIDStorageEntry struct {
 // required to be stored as metadata in the response, and/or the information required to
 // create the client token.
 type validationResponse struct {
-	SelectorID    string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
-	HMACKey       string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
-	SelectorValue string        `json:"selector_value" structs:"selector_value" mapstructure:"selector_value"`
-	TokenTTL      time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
-	TokenMaxTTL   time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
-	Policies      []string      `json:"policies" structs:"policies" mapstructure:"policies"`
+	SelectorID  string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+	HMACKey     string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
+	TokenTTL    time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
+	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
+	Policies    []string      `json:"policies" structs:"policies" mapstructure:"policies"`
 }
 
 // selectorStorageEntry represents the reverse mapping of the selector to
@@ -123,15 +123,7 @@ func (b *backend) validateCredentials(s logical.Storage, selectorID, secretID st
 		return nil, fmt.Errorf("missing secret_id")
 	}
 
-	selIDEntry, err := b.selectorIDEntry(s, selectorID)
-	if err != nil {
-		return nil, err
-	}
-	if selIDEntry == nil {
-		return nil, fmt.Errorf("invalid selector_id")
-	}
-
-	validationResp, err := b.validateSelector(s, selIDEntry.Type, selIDEntry.Name)
+	validationResp, err := b.validateSelectorID(s, selectorID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,16 +142,25 @@ func (b *backend) validateCredentials(s logical.Storage, selectorID, secretID st
 }
 
 // Check if there exists an entry in the name of selectorValue for the selectorType supplied.
-func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValue string) (*validationResponse, error) {
+func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*validationResponse, error) {
+	selector, err := b.selectorIDEntry(s, selectorID)
+	if err != nil {
+		return nil, err
+	}
+	if selector == nil {
+		return nil, fmt.Errorf("failed to find selector for selector_id:%s\n", selectorID)
+	}
+	log.Printf("selector:%#v\n", selector)
+
 	resp := &validationResponse{}
-	switch selectorType {
+	switch selector.Type {
 	case selectorTypeApp:
-		app, err := b.appEntry(s, selectorValue)
+		app, err := b.appEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
 		}
 		if app == nil {
-			return nil, fmt.Errorf("app referred by the secret ID does not exist")
+			return nil, fmt.Errorf("app %s referred by the secret ID does not exist", selector.Name)
 		}
 		resp.Policies = app.Policies
 		resp.TokenTTL = app.TokenTTL
@@ -167,12 +168,12 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 		resp.SelectorID = app.SelectorID
 		resp.HMACKey = app.HMACKey
 	case selectorTypeGroup:
-		group, err := b.groupEntry(s, selectorValue)
+		group, err := b.groupEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
 		}
 		if group == nil {
-			return nil, fmt.Errorf("group referred by the secret ID does not exist")
+			return nil, fmt.Errorf("group %s referred by the secret ID does not exist", selector.Name)
 		}
 		groupPolicies, err := b.fetchPolicies(s, group.Apps)
 		if err != nil {
@@ -189,7 +190,7 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 		resp.SelectorID = group.SelectorID
 		resp.HMACKey = group.HMACKey
 	case selectorTypeSuperGroup:
-		superGroup, err := b.superGroupEntry(s, selectorValue)
+		superGroup, err := b.superGroupEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +233,6 @@ func (b *backend) validateSelector(s logical.Storage, selectorType, selectorValu
 	}
 
 	// Cap the token_ttl and token_max_ttl values.
-	var err error
 	resp.TokenTTL, resp.TokenMaxTTL, err = b.SanitizeTTL(resp.TokenTTL, resp.TokenMaxTTL)
 	if err != nil {
 		return nil, err
@@ -310,13 +310,19 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 		// and it is not cleaned up in any other way. When the SecretID belonging
 		// to the superGroup storage entry is getting invalidated, the entry should
 		// be deleted as well.
-		/*
-			if selectorType == selectorTypeSuperGroup {
-				if err := b.deleteSuperGroupEntry(s, selectorValue); err != nil {
-					return false, err
-				}
+		selector, err := b.selectorIDEntry(s, selectorID)
+		if err != nil {
+			return false, err
+		}
+		if selector == nil {
+			return false, fmt.Errorf("failed to find selector for selector_id:%s\n", selectorID)
+		}
+
+		if selector.Type == selectorTypeSuperGroup {
+			if err := b.deleteSuperGroupEntry(s, selector.Name); err != nil {
+				return false, err
 			}
-		*/
+		}
 	} else {
 		// If the use count is greater than one, decrement it and update the last updated time.
 		result.SecretIDNumUses -= 1
