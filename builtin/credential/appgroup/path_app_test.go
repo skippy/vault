@@ -31,6 +31,55 @@ func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies st
 	}
 }
 
+func TestBackend_app_list_secret_id(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
+
+	createApp(t, b, storage, "app1", "a,b")
+
+	secretIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id",
+	}
+	// Create 5 'secret_id's
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id/",
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	secrets := resp.Data["keys"].([]string)
+	if len(secrets) != 5 {
+		t.Fatalf("bad: len of secrets: expected:5 actual:%d", len(secrets))
+	}
+}
+
 func TestBackend_app_list(t *testing.T) {
 	var resp *logical.Response
 	var err error

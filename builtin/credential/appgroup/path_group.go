@@ -371,7 +371,7 @@ func (b *backend) pathGroupSecretIDList(
 		return logical.ErrorResponse("missing group_name"), nil
 	}
 
-	group, err := b.appEntry(req.Storage, strings.ToLower(groupName))
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
 	if err != nil {
 		return nil, err
 	}
