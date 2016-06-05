@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/vault/helper/policyutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/mitchellh/mapstructure"
 )
@@ -27,6 +28,34 @@ func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies st
 	resp, err := b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+}
+
+func TestBackend_app_list(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
+
+	createApp(t, b, storage, "app1", "a,b")
+	createApp(t, b, storage, "app2", "c,d")
+	createApp(t, b, storage, "app3", "e,f")
+	createApp(t, b, storage, "app4", "g,h")
+	createApp(t, b, storage, "app5", "i,j")
+
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "app",
+		Storage:   storage,
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	actual := resp.Data["keys"].([]string)
+	expected := []string{"app/app1", "app/app2", "app/app3", "app/app4", "app/app5"}
+	if !policyutil.EquivalentPolicies(actual, expected) {
+		t.Fatalf("bad: listed apps: expected:%s\nactual:%s", expected, actual)
 	}
 }
 

@@ -395,6 +395,9 @@ func (b *backend) setGroupEntry(s logical.Storage, groupName string, group *grou
 	if err != nil {
 		return err
 	}
+	if entry == nil {
+		return fmt.Errorf("failed to create storage entry for group %s", groupName)
+	}
 	if err = s.Put(entry); err != nil {
 		return err
 	}

@@ -166,6 +166,9 @@ func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, s
 	if err != nil {
 		return err
 	}
+	if entry == nil {
+		return fmt.Errorf("failed to create storage entry for supergroup")
+	}
 	if err = s.Put(entry); err != nil {
 		return err
 	}

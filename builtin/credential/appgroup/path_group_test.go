@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/vault/helper/policyutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/mitchellh/mapstructure"
 )
@@ -31,6 +32,35 @@ func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, a
 	}
 
 }
+
+func TestBackend_group_list(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
+
+	createGroup(t, b, storage, "group1", "", "a,b")
+	createGroup(t, b, storage, "group2", "", "c,d")
+	createGroup(t, b, storage, "group3", "", "e,f")
+	createGroup(t, b, storage, "group4", "", "g,h")
+	createGroup(t, b, storage, "group5", "", "i,j")
+
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "group",
+		Storage:   storage,
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	actual := resp.Data["keys"].([]string)
+	expected := []string{"group/group1", "group/group2", "group/group3", "group/group4", "group/group5"}
+	if !policyutil.EquivalentPolicies(actual, expected) {
+		t.Fatalf("bad: listed groups: expected:%s\nactual:%s", expected, actual)
+	}
+}
+
 func TestBackend_group_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
