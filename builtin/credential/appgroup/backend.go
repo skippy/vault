@@ -114,7 +114,7 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 // to delay the removal of SecretIDs by a minute.
 func (b *backend) periodicFunc(req *logical.Request) error {
 	// Initiate clean-up of expired SecretID entries
-	//b.tidySecretID(req.Storage)
+	b.tidySecretID(req.Storage)
 	return nil
 }
 

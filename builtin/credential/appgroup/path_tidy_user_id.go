@@ -33,35 +33,43 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 		return fmt.Errorf("secret ID tidy operation already running")
 	}
 
-	secretIDs, err := s.List("secret_id/")
+	saltedSelectors, err := s.List("secret_id/")
 	if err != nil {
 		return err
 	}
 
 	var result error
-	for _, secretID := range secretIDs {
-		secretIDEntry, err := s.Get("secret_id/" + secretID)
+	for _, saltedSelector := range saltedSelectors {
+		hashedSecrets, err := s.List(fmt.Sprintf("secret_id/%s", saltedSelector))
 		if err != nil {
-			return fmt.Errorf("error fetching secret ID %s: %s", secretID, err)
-		}
-
-		if secretIDEntry == nil {
-			result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for secret ID %s is nil", secretID)))
-		}
-
-		if secretIDEntry.Value == nil || len(secretIDEntry.Value) == 0 {
-			return fmt.Errorf("found entry for secret ID %s but actual secret ID is empty", secretID)
-		}
-
-		var result secretIDStorageEntry
-		if err := secretIDEntry.DecodeJSON(&result); err != nil {
 			return err
 		}
+		for _, hashedSecret := range hashedSecrets {
+			entryIndex := fmt.Sprintf("secret_id/%s%s", saltedSelector, hashedSecret)
+			secretIDEntry, err := s.Get(entryIndex)
+			if err != nil {
+				return fmt.Errorf("error fetching secret ID %s: %s", hashedSecret, err)
+			}
 
-		// Unset ExpirationTime indicates non-expiring SecretIDs
-		if !result.ExpirationTime.IsZero() && time.Now().UTC().After(result.ExpirationTime) {
-			if err := s.Delete("secret_id/" + secretID); err != nil {
-				return fmt.Errorf("error deleting secret ID %s from storage: %s", secretID, err)
+			if secretIDEntry == nil {
+				result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for secret ID %s is nil", hashedSecret)))
+				continue
+			}
+
+			if secretIDEntry.Value == nil || len(secretIDEntry.Value) == 0 {
+				return fmt.Errorf("found entry for secret ID %s but actual secret ID is empty", hashedSecret)
+			}
+
+			var result secretIDStorageEntry
+			if err := secretIDEntry.DecodeJSON(&result); err != nil {
+				return err
+			}
+
+			// Unset ExpirationTime indicates non-expiring SecretIDs
+			if !result.ExpirationTime.IsZero() && time.Now().UTC().After(result.ExpirationTime) {
+				if err := s.Delete(entryIndex); err != nil {
+					return fmt.Errorf("error deleting secret ID %s from storage: %s", hashedSecret, err)
+				}
 			}
 		}
 	}
