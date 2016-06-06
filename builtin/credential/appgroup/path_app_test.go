@@ -11,6 +11,60 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+func TestBackend_app_delete_secret_id(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
+
+	createApp(t, b, storage, "app1", "a,b")
+	secretIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id",
+	}
+	// Create 3 secrets on the app
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(secretIDReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id",
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	hashedSecrets := resp.Data["keys"].([]string)
+	if len(hashedSecrets) != 3 {
+		t.Fatalf("bad: len of hashedSecrets: expected:3 actual:%d", len(hashedSecrets))
+	}
+
+	appReq := &logical.Request{
+		Operation: logical.DeleteOperation,
+		Storage:   storage,
+		Path:      "app/app1",
+	}
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || resp == nil || (resp != nil && !resp.IsError()) {
+		t.Fatalf("expected an error. err:%v resp:%#v", err, resp)
+	}
+}
+
 func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	var resp *logical.Response
 	var err error
