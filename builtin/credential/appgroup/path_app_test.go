@@ -2,6 +2,7 @@ package appgroup
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,24 +11,62 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies string) {
-	appData := map[string]interface{}{
-		"policies":           policies,
-		"secret_id_num_uses": 10,
-		"secret_id_ttl":      300,
-		"token_ttl":          400,
-		"token_max_ttl":      500,
-	}
-	appReq := &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "app/" + appName,
-		Storage:   s,
-		Data:      appData,
-	}
+func TestBackend_app_secret_id_read_delete(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
 
-	resp, err := b.HandleRequest(appReq)
+	createApp(t, b, storage, "app1", "a,b")
+	secretIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id",
+	}
+	resp, err = b.HandleRequest(secretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id",
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	hmacSecretID := resp.Data["keys"].([]string)[0]
+	shards := strings.Split(hmacSecretID, "/")
+	hmacSecretID = shards[len(shards)-1]
+
+	hmacReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "app/app1/secret-id/" + hmacSecretID,
+	}
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	result := secretIDStorageEntry{}
+	if err := mapstructure.Decode(resp.Data, &result); err != nil {
+		t.Fatal(err)
+	}
+
+	hmacReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	hmacReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	if resp != nil {
+		t.Fatalf("expected a nil response")
 	}
 }
 
@@ -514,5 +553,26 @@ func TestBackend_app_CRUD(t *testing.T) {
 
 	if resp != nil {
 		t.Fatalf("expected a nil response")
+	}
+}
+
+func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies string) {
+	appData := map[string]interface{}{
+		"policies":           policies,
+		"secret_id_num_uses": 10,
+		"secret_id_ttl":      300,
+		"token_ttl":          400,
+		"token_max_ttl":      500,
+	}
+	appReq := &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "app/" + appName,
+		Storage:   s,
+		Data:      appData,
+	}
+
+	resp, err := b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 }

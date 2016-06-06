@@ -2,6 +2,7 @@ package appgroup
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,27 +11,65 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, additionalPolicies string) {
-	groupData := map[string]interface{}{
-		"apps":                apps,
-		"additional_policies": additionalPolicies,
-		"secret_id_num_uses":  10,
-		"secret_id_ttl":       300,
-		"token_ttl":           400,
-		"token_max_ttl":       500,
-	}
-	groupReq := &logical.Request{
-		Operation: logical.CreateOperation,
-		Path:      "group/" + groupName,
-		Storage:   s,
-		Data:      groupData,
-	}
+func TestBackend_group_secret_id_read_delete(t *testing.T) {
+	var resp *logical.Response
+	var err error
+	b, storage := createBackendWithStorage(t)
 
-	resp, err := b.HandleRequest(groupReq)
+	createApp(t, b, storage, "app1", "a,b")
+	createGroup(t, b, storage, "group1", "app1", "a,b")
+
+	secretIDReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "group/group1/secret-id",
+	}
+	resp, err = b.HandleRequest(secretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
+	listReq := &logical.Request{
+		Operation: logical.ListOperation,
+		Storage:   storage,
+		Path:      "group/group1/secret-id",
+	}
+	resp, err = b.HandleRequest(listReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	hmacSecretID := resp.Data["keys"].([]string)[0]
+	shards := strings.Split(hmacSecretID, "/")
+	hmacSecretID = shards[len(shards)-1]
+
+	hmacReq := &logical.Request{
+		Operation: logical.ReadOperation,
+		Storage:   storage,
+		Path:      "group/group1/secret-id/" + hmacSecretID,
+	}
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	result := secretIDStorageEntry{}
+	if err := mapstructure.Decode(resp.Data, &result); err != nil {
+		t.Fatal(err)
+	}
+
+	hmacReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	hmacReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(hmacReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+	if resp != nil {
+		t.Fatalf("expected a nil response")
+	}
 }
 
 func TestBackend_group_list_secret_id(t *testing.T) {
@@ -582,4 +621,27 @@ func TestBackend_group_CRUD(t *testing.T) {
 	if resp != nil {
 		t.Fatalf("expected a nil response")
 	}
+}
+
+func createGroup(t *testing.T, b *backend, s logical.Storage, groupName, apps, additionalPolicies string) {
+	groupData := map[string]interface{}{
+		"apps":                apps,
+		"additional_policies": additionalPolicies,
+		"secret_id_num_uses":  10,
+		"secret_id_ttl":       300,
+		"token_ttl":           400,
+		"token_max_ttl":       500,
+	}
+	groupReq := &logical.Request{
+		Operation: logical.CreateOperation,
+		Path:      "group/" + groupName,
+		Storage:   s,
+		Data:      groupData,
+	}
+
+	resp, err := b.HandleRequest(groupReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
 }

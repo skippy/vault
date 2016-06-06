@@ -671,9 +671,8 @@ func (b *backend) pathGroupSecretIDHMACRead(req *logical.Request, data *framewor
 		return nil, err
 	}
 
-	respData := structs.New(result).Map()
 	return &logical.Response{
-		Data: respData,
+		Data: structs.New(result).Map(),
 	}, nil
 }
 
