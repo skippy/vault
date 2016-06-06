@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -443,4 +444,28 @@ func (b *backend) fetchPolicies(s logical.Storage, apps []string) ([]string, err
 		policies = append(policies, app.Policies...)
 	}
 	return strutil.RemoveDuplicates(policies), nil
+}
+
+func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) error {
+	lock := b.secretIDLock("")
+	lock.RLock()
+	hashedSecretIDs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
+	if err != nil {
+		return err
+	}
+	lock.RUnlock()
+	log.Printf("hashedSecrets:%#v\n", hashedSecretIDs)
+	for _, hashedSecretID := range hashedSecretIDs {
+		lock = b.secretIDLock(hashedSecretID)
+		lock.Lock()
+		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
+		log.Printf("entryIndex: %s\n", entryIndex)
+		if err := s.Delete(entryIndex); err != nil {
+			lock.Unlock()
+			return fmt.Errorf("error deleting secret ID %s from storage: %s", hashedSecretID, err)
+		}
+		lock.Unlock()
+	}
+	log.Printf("completed flushing secrets\n")
+	return nil
 }
