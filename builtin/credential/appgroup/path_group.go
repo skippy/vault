@@ -361,10 +361,6 @@ func (b *backend) pathGroupList(
 // pathGroupSecretIDList is used to list all the Apps registered with the backend.
 func (b *backend) pathGroupSecretIDList(
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	// Get the "custom" lock
-	lock := b.secretIDLock("")
-	lock.RLock()
-	defer lock.RUnlock()
 
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
@@ -379,7 +375,12 @@ func (b *backend) pathGroupSecretIDList(
 		return logical.ErrorResponse(fmt.Sprintf("group %s does not exist", groupName)), nil
 	}
 
-	secrets, err := req.Storage.List(fmt.Sprintf("secret_id/%s", b.salt.SaltID(group.SelectorID)))
+	// Get the "custom" lock
+	lock := b.secretIDLock("")
+	lock.RLock()
+	defer lock.RUnlock()
+
+	secrets, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(group.SelectorID)))
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,6 @@ package appgroup
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -511,14 +510,12 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
 	}
-	log.Printf("reading appName\n")
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("invoking flush\n")
 	// When the app is getting deleted, remove all the secrets issued as part of the app.
 	if err = b.flushSelectorSecrets(req.Storage, app.SelectorID); err != nil {
 		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app %s", appName)

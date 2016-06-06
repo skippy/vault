@@ -3,7 +3,6 @@ package appgroup
 import (
 	"log"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +38,6 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	}
 	hmacSecretID := resp.Data["keys"].([]string)[0]
 	log.Printf("hmacSecretID: %s\n", hmacSecretID)
-	shards := strings.Split(hmacSecretID, "/")
-	hmacSecretID = shards[len(shards)-1]
 
 	hmacReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -143,7 +140,7 @@ func TestBackend_app_list(t *testing.T) {
 	}
 
 	actual := resp.Data["keys"].([]string)
-	expected := []string{"app/app1", "app/app2", "app/app3", "app/app4", "app/app5"}
+	expected := []string{"app1", "app2", "app3", "app4", "app5"}
 	if !policyutil.EquivalentPolicies(actual, expected) {
 		t.Fatalf("bad: listed apps: expected:%s\nactual:%s", expected, actual)
 	}

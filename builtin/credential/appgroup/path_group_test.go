@@ -2,7 +2,6 @@ package appgroup
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,8 +38,6 @@ func TestBackend_group_secret_id_read_delete(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 	hmacSecretID := resp.Data["keys"].([]string)[0]
-	shards := strings.Split(hmacSecretID, "/")
-	hmacSecretID = shards[len(shards)-1]
 
 	hmacReq := &logical.Request{
 		Operation: logical.ReadOperation,
@@ -110,7 +107,7 @@ func TestBackend_group_list_secret_id(t *testing.T) {
 	listReq := &logical.Request{
 		Operation: logical.ListOperation,
 		Storage:   storage,
-		Path:      "group/group1/secret-id",
+		Path:      "group/group1/secret-id/",
 	}
 	resp, err = b.HandleRequest(listReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -144,7 +141,7 @@ func TestBackend_group_list(t *testing.T) {
 	}
 
 	actual := resp.Data["keys"].([]string)
-	expected := []string{"group/group1", "group/group2", "group/group3", "group/group4", "group/group5"}
+	expected := []string{"group1", "group2", "group3", "group4", "group5"}
 	if !policyutil.EquivalentPolicies(actual, expected) {
 		t.Fatalf("bad: listed groups: expected:%s\nactual:%s", expected, actual)
 	}
