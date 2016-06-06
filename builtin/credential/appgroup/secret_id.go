@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -454,18 +453,15 @@ func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) err
 		return err
 	}
 	lock.RUnlock()
-	log.Printf("hashedSecrets:%#v\n", hashedSecretIDs)
 	for _, hashedSecretID := range hashedSecretIDs {
 		lock = b.secretIDLock(hashedSecretID)
 		lock.Lock()
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
-		log.Printf("entryIndex: %s\n", entryIndex)
 		if err := s.Delete(entryIndex); err != nil {
 			lock.Unlock()
 			return fmt.Errorf("error deleting secret ID %s from storage: %s", hashedSecretID, err)
 		}
 		lock.Unlock()
 	}
-	log.Printf("completed flushing secrets\n")
 	return nil
 }

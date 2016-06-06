@@ -358,7 +358,7 @@ func (b *backend) pathGroupList(
 	return logical.ListResponse(groups), nil
 }
 
-// pathGroupSecretIDList is used to list all the Apps registered with the backend.
+// pathGroupSecretIDList is used to list all the 'secret_id's issued on the group.
 func (b *backend) pathGroupSecretIDList(
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 
@@ -546,10 +546,22 @@ func (b *backend) pathGroupDelete(req *logical.Request, data *framework.FieldDat
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
 	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+
+	// Acquire the lock before deleting the secrets.
 	b.groupLock.Lock()
 	defer b.groupLock.Unlock()
 
-	if err := req.Storage.Delete("group/" + strings.ToLower(groupName)); err != nil {
+	// When the group is getting deleted, remove all the secrets issued as part of the group.
+	if err = b.flushSelectorSecrets(req.Storage, group.SelectorID); err != nil {
+		return nil, fmt.Errorf("failed to invalidate the secrets belonging to group %s", groupName)
+	}
+
+	if err = req.Storage.Delete("group/" + strings.ToLower(groupName)); err != nil {
 		return nil, err
 	}
 

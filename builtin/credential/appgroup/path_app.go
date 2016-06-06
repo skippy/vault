@@ -516,13 +516,15 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 		return nil, err
 	}
 
+	// Acquire the lock before deleting the secrets.
+	b.appLock.Lock()
+	defer b.appLock.Unlock()
+
 	// When the app is getting deleted, remove all the secrets issued as part of the app.
 	if err = b.flushSelectorSecrets(req.Storage, app.SelectorID); err != nil {
 		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app %s", appName)
 	}
 
-	b.appLock.Lock()
-	defer b.appLock.Unlock()
 	if err = req.Storage.Delete("app/" + strings.ToLower(appName)); err != nil {
 		return nil, err
 	}
