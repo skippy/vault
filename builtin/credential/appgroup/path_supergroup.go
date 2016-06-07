@@ -271,9 +271,8 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return logical.ErrorResponse("token_ttl should not be greater than token_max_ttl"), nil
 	}
 
-	var resp *logical.Response
-	if supergroup.TokenMaxTTL > b.System().MaxLeaseTTL() {
-		resp = &logical.Response{}
+	resp := &logical.Response{}
+	if superGroup.TokenMaxTTL > b.System().MaxLeaseTTL() {
 		resp.AddWarning("token_max_ttl is greater than the backend mount's maximum TTL value; issued tokens' max TTL value will be truncated")
 	}
 
