@@ -48,17 +48,18 @@ type groupStorageEntry struct {
 // groupPaths creates all the paths that are used to register and manage an Group.
 //
 // Paths returned:
-// group/
-// group/<group_name>
-// group/<group_name>/policies
-// group/<group_name>/bind-secret-id
-// group/<group_name>/num-uses
-// group/<group_name>/secret_id-ttl
-// group/<group_name>/token-ttl
-// group/<group_name>/token-max-ttl
-// group/<group_name>/selector-id
-// group/<group_name>/secret-id
-// group/<group_name>/custom-secret-id
+// group/ - For listing all the registered Groups
+// group/<group_name> - For registering a Group
+// group/<group_name>/additional-policies - For updating the param
+// group/<group_name>/bind-secret-id - For updating the param
+// group/<group_name>/secret-id-num-uses - For updating the param
+// group/<group_name>/secret-id-ttl - For updating the param
+// group/<group_name>/token-ttl - For updating the param
+// group/<group_name>/token-max-ttl - For updating the param
+// group/<group_name>/selector-id - For fetching the selector_id of a Group.
+// group/<group_name>/secret-id - For issuing secret_id against a Group and to list the hashed secret_ids
+// group/<group_name>/secret-id/<secret_id_hmac> - For reading the properties of, or deleting a secret_id
+// group/<group_name>/custom-secret-id - For assigning a custom secret ID against a Group
 func groupPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
@@ -84,7 +85,7 @@ func groupPaths(b *backend) []*framework.Path {
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
 					Default:     true,
-					Description: "Impose secret_id to be presented during login using this Group. Defaults to 'true'.",
+					Description: "Impose secret_id to be presented when logging in using this Group. Defaults to 'true'.",
 				},
 				"additional_policies": &framework.FieldSchema{
 					Type:    framework.TypeString,
@@ -346,8 +347,7 @@ func (b *backend) pathGroupExistenceCheck(req *logical.Request, data *framework.
 }
 
 // pathGroupList is used to list all the Groups registered with the backend.
-func (b *backend) pathGroupList(
-	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathGroupList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.groupLock.RLock()
 	defer b.groupLock.RUnlock()
 
@@ -359,9 +359,7 @@ func (b *backend) pathGroupList(
 }
 
 // pathGroupSecretIDList is used to list all the 'secret_id's issued on the group.
-func (b *backend) pathGroupSecretIDList(
-	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-
+func (b *backend) pathGroupSecretIDList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
 		return logical.ErrorResponse("missing group_name"), nil
@@ -403,6 +401,7 @@ func (b *backend) setGroupEntry(s logical.Storage, groupName string, group *grou
 		return err
 	}
 
+	// Create a selector ID reverse mapping entry for the Group
 	return b.setSelectorIDEntry(s, group.SelectorID, &selectorIDStorageEntry{
 		Type: selectorTypeGroup,
 		Name: groupName,
@@ -508,8 +507,14 @@ func (b *backend) pathGroupCreateUpdate(req *logical.Request, data *framework.Fi
 		return logical.ErrorResponse("token_ttl should not be greater than token_max_ttl"), nil
 	}
 
+	var resp *logical.Response
+	if group.TokenMaxTTL > b.System().MaxLeaseTTL() {
+		resp = &logical.Response{}
+		resp.AddWarning("token_max_ttl is greater than the backend mount's maximum TTL value; issued tokens' max TTL value will be truncated")
+	}
+
 	// Store the entry.
-	return nil, b.setGroupEntry(req.Storage, groupName, group)
+	return resp, b.setGroupEntry(req.Storage, groupName, group)
 }
 
 // pathGroupRead grabs a read lock and reads the options set on the Group from the storage
@@ -556,7 +561,7 @@ func (b *backend) pathGroupDelete(req *logical.Request, data *framework.FieldDat
 	b.groupLock.Lock()
 	defer b.groupLock.Unlock()
 
-	// When the group is getting deleted, remove all the secrets issued as part of the group.
+	// Just before the group is deleted, remove all the secrets issued as part of the group.
 	if err = b.flushSelectorSecrets(req.Storage, group.SelectorID); err != nil {
 		return nil, fmt.Errorf("failed to invalidate the secrets belonging to group %s", groupName)
 	}
@@ -628,28 +633,6 @@ func (b *backend) pathGroupAppsDelete(req *logical.Request, data *framework.Fiel
 	return nil, b.setGroupEntry(req.Storage, groupName, group)
 }
 
-func (b *backend) pathGroupBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	groupName := data.Get("group_name").(string)
-	if groupName == "" {
-		return logical.ErrorResponse("missing group_name"), nil
-	}
-
-	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
-	if err != nil {
-		return nil, err
-	}
-	if group == nil {
-		return nil, nil
-	}
-
-	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
-		group.BindSecretID = bindSecretIDRaw.(bool)
-		return nil, b.setGroupEntry(req.Storage, groupName, group)
-	} else {
-		return logical.ErrorResponse("missing bind_secret_id"), nil
-	}
-}
-
 func (b *backend) pathGroupSecretIDHMACRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	groupName := data.Get("group_name").(string)
 	if groupName == "" {
@@ -715,6 +698,28 @@ func (b *backend) pathGroupSecretIDHMACDelete(req *logical.Request, data *framew
 	defer lock.Unlock()
 
 	return nil, req.Storage.Delete(entryIndex)
+}
+
+func (b *backend) pathGroupBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	groupName := data.Get("group_name").(string)
+	if groupName == "" {
+		return logical.ErrorResponse("missing group_name"), nil
+	}
+
+	group, err := b.groupEntry(req.Storage, strings.ToLower(groupName))
+	if err != nil {
+		return nil, err
+	}
+	if group == nil {
+		return nil, nil
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		group.BindSecretID = bindSecretIDRaw.(bool)
+		return nil, b.setGroupEntry(req.Storage, groupName, group)
+	} else {
+		return logical.ErrorResponse("missing bind_secret_id"), nil
+	}
 }
 
 func (b *backend) pathGroupBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {

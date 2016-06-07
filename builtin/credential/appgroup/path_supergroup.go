@@ -158,6 +158,9 @@ addition to those, a set of policies can be assigned using this.
 	}
 }
 
+// setSuperGroupEntry creates a storage entry for the options set on a supergroup.
+// During login, this storage entry is referred to determine the capabilities to
+// be allowed as part of authentication and authorization.
 func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, superGroup *superGroupStorageEntry) error {
 	b.superGroupLock.Lock()
 	defer b.superGroupLock.Unlock()
@@ -173,12 +176,14 @@ func (b *backend) setSuperGroupEntry(s logical.Storage, superGroupName string, s
 		return err
 	}
 
+	// Create a selector ID reverse mapping entry for the supergroup
 	return b.setSelectorIDEntry(s, superGroup.SelectorID, &selectorIDStorageEntry{
 		Type: selectorTypeSuperGroup,
 		Name: superGroupName,
 	})
 }
 
+// deleteSuperGroupEntry deletes the storage associated with the supergroup.
 func (b *backend) deleteSuperGroupEntry(s logical.Storage, superGroupName string) error {
 	if superGroupName == "" {
 		return fmt.Errorf("missing superGroupName")
@@ -189,6 +194,8 @@ func (b *backend) deleteSuperGroupEntry(s logical.Storage, superGroupName string
 	return s.Delete("supergroup/" + strings.ToLower(superGroupName))
 }
 
+// superGroupEntry is used to read the storage entry containing options that are set
+// for the supergroup.
 func (b *backend) superGroupEntry(s logical.Storage, superGroupName string) (*superGroupStorageEntry, error) {
 	if superGroupName == "" {
 		return nil, fmt.Errorf("missing superGroupName")
@@ -210,6 +217,7 @@ func (b *backend) superGroupEntry(s logical.Storage, superGroupName string) (*su
 	return &result, nil
 }
 
+// Path to issue a 'secret_id' on the supergroup
 func (b *backend) pathSuperGroupSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID, err := uuid.GenerateUUID()
 	if err != nil {
@@ -218,18 +226,25 @@ func (b *backend) pathSuperGroupSecretIDUpdate(req *logical.Request, data *frame
 	return b.handleSuperGroupSecretIDCommon(req, data, secretID)
 }
 
+// Path to assign a custom 'secret_id' on the supergroup
 func (b *backend) pathSuperGroupCustomSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	return b.handleSuperGroupSecretIDCommon(req, data, data.Get("secret_id").(string))
 }
 
+// A common procedure to register a 'secret_id' against a supergroup. Currently this
+// only supports 'bind_secret_id'.
 func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *framework.FieldData, secretID string) (*logical.Response, error) {
+	if secretID == "" {
+		return logical.ErrorResponse("missing secret_id"), nil
+	}
+
 	selectorID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
 	}
 	hmacKey, err := uuid.GenerateUUID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
+		return nil, fmt.Errorf("failed to create hmac_key: %s\n", err)
 	}
 	superGroup := &superGroupStorageEntry{
 		SelectorID:         selectorID,
@@ -256,10 +271,20 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return logical.ErrorResponse("token_ttl should not be greater than token_max_ttl"), nil
 	}
 
-	if secretID == "" {
-		return logical.ErrorResponse("missing secret_id"), nil
+	var resp *logical.Response
+	if supergroup.TokenMaxTTL > b.System().MaxLeaseTTL() {
+		resp = &logical.Response{}
+		resp.AddWarning("token_max_ttl is greater than the backend mount's maximum TTL value; issued tokens' max TTL value will be truncated")
 	}
 
+	// Only bind_secret_id is supported now. Check for it.
+	if !superGroup.BindSecretID {
+		return logical.ErrorResponse("bind_secret_id is not set on the app"), nil
+	}
+
+	// Since there is no pre-registration of supergroups, there should be a predictable
+	// way to refer to the options set on the supergroup, during login time. Setting the
+	// name of the supergroup to be the salted hash of secret_id itself.
 	superGroupName := b.salt.SaltID(secretID)
 
 	// Store the entry.
@@ -279,12 +304,12 @@ func (b *backend) handleSuperGroupSecretIDCommon(req *logical.Request, data *fra
 		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}
 
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"secret_id":   secretID,
-			"selector_id": superGroup.SelectorID,
-		},
-	}, nil
+	resp.Data = map[string]interface{}{
+		"secret_id":   secretID,
+		"selector_id": superGroup.SelectorID,
+	}
+
+	return resp, nil
 }
 
 const pathSuperGroupCustomSecretIDHelpSys = `Assign a SecretID of choice against any combination of

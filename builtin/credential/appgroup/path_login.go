@@ -2,7 +2,6 @@ package appgroup
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -31,27 +30,8 @@ func pathLogin(b *backend) *framework.Path {
 }
 
 func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	secretID := strings.TrimSpace(data.Get("secret_id").(string))
-	if secretID == "" {
-		return logical.ErrorResponse("missing secret_id"), nil
-	}
-
-	// Selector can optionally be prepended to the SecretID with a `;` delimiter
-	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
-	if selectorID == "" {
-		selectorFields := strings.SplitN(secretID, ";", 2)
-		if len(selectorFields) != 2 || selectorFields[0] == "" {
-			return logical.ErrorResponse("missing selector_id"), nil
-		} else if selectorFields[1] == "" {
-			return logical.ErrorResponse("missing secret_id"), nil
-		} else {
-			selectorID = selectorFields[0]
-			secretID = selectorFields[1]
-		}
-	}
-
-	validateResp, err := b.validateCredentials(req.Storage, selectorID, secretID)
-	if err != nil {
+	validateResp, err := b.validateCredentials(req.Storage, data)
+	if err != nil || validateResp == nil {
 		return logical.ErrorResponse(fmt.Sprintf("failed to validate secret ID: %s", err)), nil
 	}
 

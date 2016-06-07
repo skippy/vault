@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/vault/helper/policyutil"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
+	"github.com/hashicorp/vault/logical/framework"
 )
 
 const (
@@ -45,15 +47,16 @@ type secretIDStorageEntry struct {
 // required to be stored as metadata in the response, and/or the information required to
 // create the client token.
 type validationResponse struct {
-	SelectorID  string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
-	HMACKey     string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
-	TokenTTL    time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
-	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
-	Policies    []string      `json:"policies" structs:"policies" mapstructure:"policies"`
+	SelectorID   string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
+	HMACKey      string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
+	TokenTTL     time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
+	TokenMaxTTL  time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
+	Policies     []string      `json:"policies" structs:"policies" mapstructure:"policies"`
+	BindSecretID bool          `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
 }
 
-// selectorStorageEntry represents the reverse mapping of the selector to
-// the respective app or group that the selectorID belongs to.
+// selectorStorageEntry represents the reverse mapping from the selector
+// to the respective app or group that the selectorID belongs to.
 type selectorIDStorageEntry struct {
 	// Type of selector: "app", "group", "supergroup"
 	Type string `json:"type" structs:"type" mapstructure:"type"`
@@ -62,19 +65,8 @@ type selectorIDStorageEntry struct {
 	Name string `json:"name" structs:"name" mapstructure:"name"`
 }
 
-func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
-	var lock *sync.RWMutex
-	var ok bool
-	if len(selectorID) >= 2 {
-		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
-	}
-	if !ok || lock == nil {
-		// Fall back for custom secret IDs
-		lock = b.selectorIDLocksMap["custom"]
-	}
-	return lock
-}
-
+// setSelectorIDEntry creates a storage entry that maps the selector ID
+// to an App or a Group.
 func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selectorEntry *selectorIDStorageEntry) error {
 	lock := b.selectorIDLock(selectorID)
 	lock.Lock()
@@ -90,6 +82,8 @@ func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selec
 	return nil
 }
 
+// selectorIDEntry is used to read the storage entry that maps the selector
+// ID to an App or a Group.
 func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*selectorIDStorageEntry, error) {
 	if selectorID == "" {
 		return nil, fmt.Errorf("missing selectorID")
@@ -112,36 +106,61 @@ func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*select
 	return &result, nil
 }
 
-// Identifies the supplied selector and validates it, checks if the supplied secret ID
-// has a corresponding entry in the backend and udpates the use count if needed.
-func (b *backend) validateCredentials(s logical.Storage, selectorID, secretID string) (*validationResponse, error) {
+// Identifies the supplied selector ID and validates it, checks if the supplied
+// secret ID has a corresponding entry in the backend and udpates the use count
+// if needed.
+func (b *backend) validateCredentials(s logical.Storage, data *framework.FieldData) (*validationResponse, error) {
+	// SelectorID must be supplied during every login
+	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
 	if selectorID == "" {
 		return nil, fmt.Errorf("missing selector_id")
 	}
-	if secretID == "" {
-		return nil, fmt.Errorf("missing secret_id")
-	}
 
+	// First validate the selector ID. Based on which type the selector
+	// belongs to, the validationResp will contain all the information
+	// required to continue the credential verification. Based on which
+	// binds are set, continue the verification process.
 	validationResp, err := b.validateSelectorID(s, selectorID)
 	if err != nil {
 		return nil, err
 	}
+	if validationResp == nil {
+		return nil, fmt.Errorf("failed to validate selector_id")
+	}
 
-	// Check if the secret ID supplied is valid. If use limit was specified
-	// on the secret ID, it will be decremented in this call.
-	valid, err := b.secretIDEntryValid(s, selectorID, secretID, validationResp.HMACKey)
-	if err != nil {
-		return nil, err
+	// If 'bind_secret_id' was set on app/group/supergroup, look for the
+	// field 'secret_id' to be specified and validate it.
+	if validationResp.BindSecretID {
+		secretID := strings.TrimSpace(data.Get("secret_id").(string))
+		if secretID == "" {
+			return nil, fmt.Errorf("missing secret_id")
+		}
+
+		// Check if the secret ID supplied is valid. If use limit was specified
+		// on the secret ID, it will be decremented in this call.
+		valid, err := b.validateBindSecretID(s, selectorID, secretID, validationResp.HMACKey)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
+		}
+	} else {
+		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one")
 	}
-	if !valid {
-		return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
-	}
+
+	// As and when more binds are supported, add additional verification process
 
 	return validationResp, nil
 }
 
-// Check if there exists an entry in the name of selectorValue for the selectorType supplied.
+// validateSelectorID checks if there is a storage entry that maps the selector ID
+// to app/group/supergroup. If it finds a mapping, then a validation response is
+// returned containing a generic set of information that is used to perform further
+// verification of credentials supplied and the information required to authenticate
+// the request.
 func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*validationResponse, error) {
+	// Look for the storage entry that maps the selectorID to app/group/supergroup.
 	selector, err := b.selectorIDEntry(s, selectorID)
 	if err != nil {
 		return nil, err
@@ -151,8 +170,10 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 	}
 
 	resp := &validationResponse{}
+
 	switch selector.Type {
 	case selectorTypeApp:
+		// Get the properties of App and populate the response
 		app, err := b.appEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
@@ -165,7 +186,9 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		resp.TokenMaxTTL = app.TokenMaxTTL
 		resp.SelectorID = app.SelectorID
 		resp.HMACKey = app.HMACKey
+		resp.BindSecretID = app.BindSecretID
 	case selectorTypeGroup:
+		// Get the properties of Group and populate the response
 		group, err := b.groupEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
@@ -187,7 +210,9 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		resp.TokenMaxTTL = group.TokenMaxTTL
 		resp.SelectorID = group.SelectorID
 		resp.HMACKey = group.HMACKey
+		resp.BindSecretID = group.BindSecretID
 	case selectorTypeSuperGroup:
+		// Get the properties of supergroup and populate the response
 		superGroup, err := b.superGroupEntry(s, selector.Name)
 		if err != nil {
 			return nil, err
@@ -195,6 +220,7 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		if superGroup == nil {
 			return nil, fmt.Errorf("supergroup credential referred by the secret ID does not exist")
 		}
+		// Get the properties of each group within supergroup.
 		for _, groupName := range superGroup.Groups {
 			group, err := b.groupEntry(s, groupName)
 			if err != nil {
@@ -210,6 +236,7 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 			resp.Policies = append(resp.Policies, group.AdditionalPolicies...)
 		}
 
+		// Get the properties of each app within supergroup.
 		for _, appName := range superGroup.Apps {
 			app, err := b.appEntry(s, appName)
 			if err != nil {
@@ -226,6 +253,7 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		resp.TokenMaxTTL = superGroup.TokenMaxTTL
 		resp.SelectorID = superGroup.SelectorID
 		resp.HMACKey = superGroup.HMACKey
+		resp.BindSecretID = superGroup.BindSecretID
 	default:
 		return nil, fmt.Errorf("unknown selector type")
 	}
@@ -236,25 +264,30 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		return nil, err
 	}
 
+	// The policies in response will have duplicates. Clean it up, and add 'default'
+	// policy if not added already.
 	resp.Policies = policyutil.SanitizePolicies(resp.Policies, true)
 
 	return resp, nil
 }
 
-// secretIDEntryValid is used to determine if the given secret ID is a valid one.
+// validateBindSecretID is used to determine if the given secret ID is a valid one.
 // The SecretID is looked to be present only under the sub-view of the selector.
 // This ensures that the SecretIDs that are reused between selector types, the
 // correct one is referred to. If the SecretIDs are always generated by the
 // backend, then there will be no collision between the SecretIDs from different
-// types. But, if same specific SecretIDs are assigned across different selector
-// types, then it should be supported.
-func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
+// types. But, if 'custom_secret_id's are assigned across different selector types,
+// then it should be supported.
+func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
 		return false, fmt.Errorf("failed to create HMAC of secret_id: %s", err)
 	}
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
+	// SecretID locks are always index based on hashedSecretIDs. This helps
+	// acquiring the locks when the secret IDs are listed. This allows grabbing
+	// the correct locks even if the secret IDs are not known in plaintext.
 	lock := b.secretIDLock(hashedSecretID)
 	lock.RLock()
 
@@ -297,13 +330,13 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 	}
 
 	// If there exists a single use left, delete the SecretID entry from
-	// the storage but do not fail the validation request. Delete the
-	// SecretIDs lock from the map of locks. Subsequest requests to use
-	// the same SecretID will fail.
+	// the storage but do not fail the validation request. Subsequest
+	// requests to use the same SecretID will fail.
 	if result.SecretIDNumUses == 1 {
 		if err := s.Delete(entryIndex); err != nil {
 			return false, err
 		}
+
 		// The storage entry for superGroup type is not created by any endpoints
 		// and it is not cleaned up in any other way. When the SecretID belonging
 		// to the superGroup storage entry is getting invalidated, the entry should
@@ -315,7 +348,6 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 		if selector == nil {
 			return false, fmt.Errorf("failed to find selector for selector_id:%s\n", selectorID)
 		}
-
 		if selector.Type == selectorTypeSuperGroup {
 			if err := b.deleteSuperGroupEntry(s, selector.Name); err != nil {
 				return false, err
@@ -335,6 +367,27 @@ func (b *backend) secretIDEntryValid(s logical.Storage, selectorID, secretID, hm
 	return true, nil
 }
 
+// selectorIDLock is used to get a lock from the pre-initialized map
+// of locks. Map is indexed based on the first 2 characters of the
+// selectorID, which is a random UUID. If the input is not hex encoded
+// or if it is empty a "custom" lock will be returned.
+func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
+	var lock *sync.RWMutex
+	var ok bool
+	if len(selectorID) >= 2 {
+		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
+	}
+	if !ok || lock == nil {
+		// Fall back for custom secret IDs
+		lock = b.selectorIDLocksMap["custom"]
+	}
+	return lock
+}
+
+// secretIDLock is used to get a lock from the pre-initialized map
+// of locks. Map is indexed based on the first 2 characters of the
+// hashed secretID. If the input is not hex encoded or if empty, a
+// "custom" lock will be returned.
 func (b *backend) secretIDLock(hashedSecretID string) *sync.RWMutex {
 	var lock *sync.RWMutex
 	var ok bool
@@ -348,7 +401,8 @@ func (b *backend) secretIDLock(hashedSecretID string) *sync.RWMutex {
 	return lock
 }
 
-// Creates HMAC using a per-role key.
+// Creates a SHA256 HMAC of the given 'value' using the given 'key'
+// and returns a hex encoded string.
 func createHMAC(key, value string) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("invalid HMAC key")
@@ -359,10 +413,6 @@ func createHMAC(key, value string) (string, error) {
 }
 
 // registerSecretIDEntry creates a new storage entry for the given SecretID.
-// Successful creation of the storage entry results in the creation of a
-// lock in the map of locks maintained at the backend. The index into the
-// map is the SecretID itself. During login, if the SecretID supplied is not
-// having a corresponding lock in the map, the login attempt fails.
 func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretEntry *secretIDStorageEntry) error {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
@@ -426,9 +476,9 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 }
 
 // Iterates through all the Apps, fetches the polices from each App
-// and returns a union of all the policies combined together.
-// An error is thrown if any App in the list of Apps supplied
-// is non-existent at the backend.
+// and returns a union of all the policies combined together. An error
+// is thrown if any App in the list of Apps supplied is non-existent
+// with the backend.
 func (b *backend) fetchPolicies(s logical.Storage, apps []string) ([]string, error) {
 	var policies []string
 	for _, appName := range apps {
@@ -445,7 +495,10 @@ func (b *backend) fetchPolicies(s logical.Storage, apps []string) ([]string, err
 	return strutil.RemoveDuplicates(policies), nil
 }
 
+// flushSelectorSecrets deletes all the 'secret_id's that belong to the given
+// selector ID.
 func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) error {
+	// Acquire the custom lock to perform listing of 'secret_id's
 	lock := b.secretIDLock("")
 	lock.RLock()
 	hashedSecretIDs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
@@ -454,6 +507,7 @@ func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) err
 	}
 	lock.RUnlock()
 	for _, hashedSecretID := range hashedSecretIDs {
+		// Acquire the lock belonging to the secret ID
 		lock = b.secretIDLock(hashedSecretID)
 		lock.Lock()
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)

@@ -1,7 +1,6 @@
 package appgroup
 
 import (
-	"log"
 	"reflect"
 	"testing"
 	"time"
@@ -91,7 +90,6 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 	hmacSecretID := resp.Data["keys"].([]string)[0]
-	log.Printf("hmacSecretID: %s\n", hmacSecretID)
 
 	hmacReq := &logical.Request{
 		Operation: logical.ReadOperation,

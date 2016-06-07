@@ -14,7 +14,8 @@ import (
 
 // appStorageEntry stores all the options that are set on an App
 type appStorageEntry struct {
-	// UUID that uniquely represents this App
+	// UUID that uniquely represents this App. This serves as a credential to perform
+	// login using this App.
 	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
 
 	// UUID that serves as the HMAC key for the hashing the 'secret_id's of the App
@@ -35,24 +36,25 @@ type appStorageEntry struct {
 	// Duration after which an issued token should not be allowed to be renewed
 	TokenMaxTTL time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
 
-	// A constraint to require 'secret_id' credential during login
+	// A constraint, if set, requires 'secret_id' credential to be presented during login
 	BindSecretID bool `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
 }
 
 // appPaths creates all the paths that are used to register and manage an App.
 //
 // Paths returned:
-// app/
-// app/<app_name>
-// app/<app_name>/policies
-// app/<app_name>/num-uses
-// app/<app_name>/secret-id-ttl
-// app/<app_name>/token-ttl
-// app/<app_name>/token-max-ttl
-// app/<app_name>/bind-secret-id
-// app/<app_name>/selector-id
-// app/<app_name>/secret-id
-// app/<app_name>/custom-secret-id
+// app/ - For listing all the registered Apps
+// app/<app_name> - For registering an App
+// app/<app_name>/policies - For updating the param
+// app/<app_name>/secret-id-num-uses - For updating the param
+// app/<app_name>/secret-id-ttl - For updating the param
+// app/<app_name>/token-ttl - For updating the param
+// app/<app_name>/token-max-ttl - For updating the param
+// app/<app_name>/bind-secret-id - For updating the param
+// app/<app_name>/selector-id - For fetching the selector_id of an App
+// app/<app_name>/secret-id - For issuing a secret_id against an App, also to list the hashed secret_ids
+// app/<app_name>/secret-id/<secret_id_hmac> - For reading the properties of, or deleting a secret_id
+// app/<app_name>/custom-secret-id - For assigning a custom secret ID against an App
 func appPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
@@ -73,7 +75,7 @@ func appPaths(b *backend) []*framework.Path {
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
 					Default:     true,
-					Description: "Impose secret_id to be presented during login using this App. Defaults to 'true'.",
+					Description: "Impose secret_id to be presented when logging in using this App. Defaults to 'true'.",
 				},
 				"policies": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -136,7 +138,7 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
-					Description: "Impose secret_id to be presented during login using this App.",
+					Description: "Impose secret_id to be presented when logging in using this App.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -297,7 +299,7 @@ func appPaths(b *backend) []*framework.Path {
 	}
 }
 
-// pathAppExistenceCheck returns if the app with the given name exists or not.
+// pathAppExistenceCheck returns whether the app with the given name exists or not.
 func (b *backend) pathAppExistenceCheck(req *logical.Request, data *framework.FieldData) (bool, error) {
 	app, err := b.appEntry(req.Storage, data.Get("app_name").(string))
 	if err != nil {
@@ -307,8 +309,7 @@ func (b *backend) pathAppExistenceCheck(req *logical.Request, data *framework.Fi
 }
 
 // pathAppList is used to list all the Apps registered with the backend.
-func (b *backend) pathAppList(
-	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.appLock.RLock()
 	defer b.appLock.RUnlock()
 
@@ -319,7 +320,9 @@ func (b *backend) pathAppList(
 	return logical.ListResponse(apps), nil
 }
 
-// pathAppSecretIDList is used to list all the Apps registered with the backend.
+// pathAppSecretIDList is used to list all the 'secret_id's issued against the App.
+// The 'secret_id's will not be returned in plaintext. Instead the HMAC-ed 'secret_id's
+// will be returned.
 func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
@@ -363,6 +366,7 @@ func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorage
 		return err
 	}
 
+	// Create a selector ID reverse mapping entry for the App
 	return b.setSelectorIDEntry(s, app.SelectorID, &selectorIDStorageEntry{
 		Type: selectorTypeApp,
 		Name: appName,
@@ -404,6 +408,7 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 	if err != nil {
 		return nil, err
 	}
+
 	// Create a new entry object if this is a CreateOperation
 	if app == nil {
 		selectorID, err := uuid.GenerateUUID()
@@ -459,8 +464,6 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		app.TokenMaxTTL = time.Second * time.Duration(data.Get("token_max_ttl").(int))
 	}
 
-	resp := &logical.Response{}
-
 	// Check that the TokenMaxTTL value provided is less than the TokenMaxTTL.
 	// Sanitizing the TTL and MaxTTL is not required now and can be performed
 	// at credential issue time.
@@ -468,7 +471,9 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		return logical.ErrorResponse("token_ttl should not be greater than token_max_ttl"), nil
 	}
 
+	var resp *logical.Response
 	if app.TokenMaxTTL > b.System().MaxLeaseTTL() {
+		resp = &logical.Response{}
 		resp.AddWarning("token_max_ttl is greater than the backend mount's maximum TTL value; issued tokens' max TTL value will be truncated")
 	}
 
@@ -520,7 +525,7 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	b.appLock.Lock()
 	defer b.appLock.Unlock()
 
-	// When the app is getting deleted, remove all the secrets issued as part of the app.
+	// Just before the app is deleted, remove all the secrets issued as part of the app.
 	if err = b.flushSelectorSecrets(req.Storage, app.SelectorID); err != nil {
 		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app %s", appName)
 	}
@@ -530,28 +535,6 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	}
 
 	return nil, nil
-}
-
-func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	appName := data.Get("app_name").(string)
-	if appName == "" {
-		return logical.ErrorResponse("missing app_name"), nil
-	}
-
-	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
-	if err != nil {
-		return nil, err
-	}
-	if app == nil {
-		return nil, nil
-	}
-
-	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
-		app.BindSecretID = bindSecretIDRaw.(bool)
-		return nil, b.setAppEntry(req.Storage, appName, app)
-	} else {
-		return logical.ErrorResponse("missing bind_secret_id"), nil
-	}
 }
 
 func (b *backend) pathAppSecretIDHMACRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -619,6 +602,28 @@ func (b *backend) pathAppSecretIDHMACDelete(req *logical.Request, data *framewor
 	defer lock.Unlock()
 
 	return nil, req.Storage.Delete(entryIndex)
+}
+
+func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
+		app.BindSecretID = bindSecretIDRaw.(bool)
+		return nil, b.setAppEntry(req.Storage, appName, app)
+	} else {
+		return logical.ErrorResponse("missing bind_secret_id"), nil
+	}
 }
 
 func (b *backend) pathAppBindSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
