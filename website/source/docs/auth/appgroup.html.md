@@ -112,3 +112,825 @@ the token. This does not mean that the token generated can access only
 a specific App. The point is that an App or a Group of Apps, represent
 a set of policies, nothing more.
 
+## API
+## API
+### auth/appgroup/app
+#### LIST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+    List all the Apps registered with the backend.
+  </dd>
+
+  <dt>Method</dt>
+  <dd>LIST/GET</dd>
+
+  <dt>URL</dt>
+  <dd>`auth/appgroup/app` (LIST) or `auth/appgroup/app?list=true`</dd>
+
+  <dt>Parameters</dt>
+    None.
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>
+  </dd>
+</dl>
+
+
+### auth/appgroup/app/<app_name>
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### DELETE
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/app/<app_name>/policies
+### auth/appgroup/app/<app_name>/secret-id-num-uses
+### auth/appgroup/app/<app_name>/secret-id-ttl
+### auth/appgroup/app/<app_name>/token-ttl
+### auth/appgroup/app/<app_name>/token-max-ttl
+### auth/appgroup/app/<app_name>/bind-secret-id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### DELETE
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/app/<app_name>/selector-id
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/app/<app_name>/secret-id
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### LIST
+
+### auth/appgroup/app/<app_name>/secret-id/<secret_id_hmac>
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### DELETE
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/app/<app_name>/custom-secret-id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/
+#### LIST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+### auth/appgroup/group/<group_name>
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### DELETE
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/<group_name>/apps
+### auth/appgroup/group/<group_name>/additional-policies
+### auth/appgroup/group/<group_name>/secret-id-num-uses
+### auth/appgroup/group/<group_name>/token-ttl
+### auth/appgroup/group/<group_name>/token-max-ttl
+### auth/appgroup/group/<group_name>/bind-secret-id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### Delete
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/<group_name>/selector-id
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/<group_name>/secret-id
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### LIST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/<group_name>/secret-id/<secret_id_hmac>
+#### GET
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+#### DELETE
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/group/<group_name>/custom-secret-id: Params: secret_id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/supergroup/secret-id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/supergroup/custom-secret-id
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+  
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
+
+
+### auth/appgroup/login selector_id="xxx-xxx-xxx" secret_id="yyy-yyy-yyy"
+#### POST
+<dl class="api">
+  <dt>Description</dt>
+  <dd>
+  </dd>
+
+  <dt>Method</dt>
+  <dd></dd>
+
+  <dt>URL</dt>
+  <dd>``</dd>
+
+  <dt>Parameters</dt>
+  <dd>
+    <ul>
+      <li>
+        <span class="param"></span>
+        <span class="param-flags"></span>
+        
+      </li>
+    </ul>
+  </dd>
+
+  <dt>Returns</dt>
+  <dd>`204` response code.
+  </dd>
+</dl>
