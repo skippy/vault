@@ -65,12 +65,15 @@ FEATURES:
    standby nodes are `standby.vault.service.consul`. Sealed vaults are marked
    critical and are not listed by default in Consul's service discovery.  See
    the documentation for details. [GH-1349]
- * **Explicit Maximum Token TTLs using Token Roles**: If using token roles, you
-   can now set explicit maximum TTLs on tokens that do not honor changes in the
-   system- or mount-set values. This is useful, for instance, when the max TTL
-   of the system or the `auth/token` mount must be set high to accommodate
-   certain needs but you want more granular restrictions on tokens being issued
-   directly from the Token authentication backend at `auth/token`. [GH-1399]
+ * **Explicit Maximum Token TTLs**: You can now set explicit maximum TTLs on
+   tokens that do not honor changes in the system- or mount-set values. This is
+   useful, for instance, when the max TTL of the system or the `auth/token`
+   mount must be set high to accommodate certain needs but you want more
+   granular restrictions on tokens being issued directly from the Token
+   authentication backend at `auth/token`. [GH-1399]
+ * **Non-Renewable Tokens**: When creating tokens directly through the token
+   authentication backend, you can now specify in both token store roles and
+   the API whether or not a token should be renewable, defaulting to `true`.
  * **RabbitMQ Secret Backend**: Vault can now generate credentials for
    RabbitMQ. Vhosts and tags can be defined within roles. [GH-788]
 
@@ -110,12 +113,14 @@ IMPROVEMENTS:
  * secret/aws: Use chain credentials to allow environment/EC2 instance/shared
    providers [GH-307]
  * secret/aws: Support for STS AssumeRole functionality [GH-1318]
- * secret/pki: Added `exclude_cn_from_sans` field to prevent adding the CN to
-   DNS or Email Subject Alternate Names [GH-1220]
  * secret/consul: Reading consul access configuration supported. The response
    will contain non-sensitive information only [GH-1445]
+ * secret/pki: Added `exclude_cn_from_sans` field to prevent adding the CN to
+   DNS or Email Subject Alternate Names [GH-1220]
+ * secret/pki: Added list support for certificates [GH-1466]
  * sys/capabilities: Enforce ACL checks for requests that query the capabilities
    of a token on a given path [GH-1221]
+ * sys/health: Status information can now be retrieved with `HEAD` [GH-1509]
 
 BUG FIXES:
 
@@ -135,6 +140,10 @@ BUG FIXES:
  * core: Don't accidentally crosswire SIGINT to the reload handler [GH-1372]
  * credential/github: Make organization comparison case-insensitive during
    login [GH-1359]
+ * credential/github: Fix panic when renewing a token created with some earlier
+   versions of Vault [GH-1510]
+ * credential/github: The token used to log in via `vault auth` can now be
+   specified in the `VAULT_AUTH_GITHUB_TOKEN` environment variable [GH-1511]
  * credential/ldap: Fix problem where certain error conditions when configuring
    or opening LDAP connections would cause a panic instead of return a useful
    error message [GH-1262]
