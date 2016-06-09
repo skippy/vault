@@ -1,4 +1,4 @@
-package appgroup
+package app
 
 import (
 	"reflect"

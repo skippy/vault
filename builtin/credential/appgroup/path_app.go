@@ -1,4 +1,4 @@
-package appgroup
+package app
 
 import (
 	"fmt"
@@ -368,7 +368,7 @@ func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorage
 
 	// Create a selector ID reverse mapping entry for the App
 	return b.setSelectorIDEntry(s, app.SelectorID, &selectorIDStorageEntry{
-		Type: selectorTypeApp,
+		Type: "app",
 		Name: appName,
 	})
 }
