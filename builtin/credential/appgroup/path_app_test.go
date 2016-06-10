@@ -106,6 +106,7 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	}
 
 	hmacReq.Operation = logical.DeleteOperation
+	hmacReq.Data = nil
 	resp, err = b.HandleRequest(hmacReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -373,6 +374,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: bind_secret_id: expected:false actual:%t\n", resp.Data["bind_secret_id"].(bool))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -384,8 +386,8 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["bind_secret_id"].(bool) {
-		t.Fatalf("expected value to be reset")
+	if !resp.Data["bind_secret_id"].(bool) {
+		t.Fatalf("expected the default value of 'true' to be set")
 	}
 
 	// RUD for policiess field
@@ -413,6 +415,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: policies: actual:%s\n", resp.Data["policies"].([]string))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -424,8 +427,10 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["policies"].([]string) != nil {
-		t.Fatalf("expected value to be reset")
+	expectedPolicies := []string{"default"}
+	actualPolicies := resp.Data["policies"].([]string)
+	if !policyutil.EquivalentPolicies(expectedPolicies, actualPolicies) {
+		t.Fatalf("bad: policies: expected:%s actual:%s", expectedPolicies, actualPolicies)
 	}
 
 	// RUD for num-uses field
@@ -453,6 +458,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: secret_id_num_uses: expected:200 actual:%d\n", resp.Data["secret_id_num_uses"].(int))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -493,6 +499,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: secret_id_ttl: expected:3001 actual:%d\n", resp.Data["secret_id_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -533,6 +540,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: token_ttl: expected:4001 actual:%d\n", resp.Data["token_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -573,6 +581,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad: token_max_ttl: expected:5001 actual:%d\n", resp.Data["token_max_ttl"].(time.Duration))
 	}
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -591,6 +600,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 	// Delete test for app
 	appReq.Path = "app/app1"
 	appReq.Operation = logical.DeleteOperation
+	appReq.Data = nil
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)

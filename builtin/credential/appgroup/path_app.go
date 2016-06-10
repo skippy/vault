@@ -118,6 +118,7 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"policies": &framework.FieldSchema{
 					Type:        framework.TypeString,
+					Default:     "default",
 					Description: "Comma separated list of policies on the App.",
 				},
 			},
@@ -138,6 +139,7 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"bind_secret_id": &framework.FieldSchema{
 					Type:        framework.TypeBool,
+					Default:     true,
 					Description: "Impose secret_id to be presented when logging in using this App.",
 				},
 			},
@@ -286,7 +288,6 @@ func appPaths(b *backend) []*framework.Path {
 				},
 				"secret_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
-					Default:     "",
 					Description: "SecretID to be attached to the App.",
 				},
 			},
@@ -659,8 +660,8 @@ func (b *backend) pathAppBindSecretIDDelete(req *logical.Request, data *framewor
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.BindSecretID = (&appStorageEntry{}).BindSecretID
+	// Deleting a field implies setting the value to it's default value.
+	app.BindSecretID = data.Get("bind_secret_id").(bool)
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -720,8 +721,7 @@ func (b *backend) pathAppPoliciesDelete(req *logical.Request, data *framework.Fi
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.Policies = (&appStorageEntry{}).Policies
+	app.Policies = policyutil.ParsePolicies(data.Get("policies").(string))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -803,8 +803,7 @@ func (b *backend) pathAppSecretIDNumUsesDelete(req *logical.Request, data *frame
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.SecretIDNumUses = (&appStorageEntry{}).SecretIDNumUses
+	app.SecretIDNumUses = data.Get("secret_id_num_uses").(int)
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -865,8 +864,7 @@ func (b *backend) pathAppSecretIDTTLDelete(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.SecretIDTTL = (&appStorageEntry{}).SecretIDTTL
+	app.SecretIDTTL = time.Second * time.Duration(data.Get("secret_id_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -930,8 +928,7 @@ func (b *backend) pathAppTokenTTLDelete(req *logical.Request, data *framework.Fi
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.TokenTTL = (&appStorageEntry{}).TokenTTL
+	app.TokenTTL = time.Second * time.Duration(data.Get("token_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -995,8 +992,7 @@ func (b *backend) pathAppTokenMaxTTLDelete(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	// Deleting a field means resetting the value in the entry.
-	app.TokenMaxTTL = (&appStorageEntry{}).TokenMaxTTL
+	app.TokenMaxTTL = time.Second * time.Duration(data.Get("token_max_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
