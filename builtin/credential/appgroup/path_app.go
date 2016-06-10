@@ -661,7 +661,7 @@ func (b *backend) pathAppBindSecretIDDelete(req *logical.Request, data *framewor
 	}
 
 	// Deleting a field implies setting the value to it's default value.
-	app.BindSecretID = data.Get("bind_secret_id").(bool)
+	app.BindSecretID = data.GetDefaultOrZero("bind_secret_id").(bool)
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -721,7 +721,7 @@ func (b *backend) pathAppPoliciesDelete(req *logical.Request, data *framework.Fi
 		return nil, nil
 	}
 
-	app.Policies = policyutil.ParsePolicies(data.Get("policies").(string))
+	app.Policies = policyutil.ParsePolicies(data.GetDefaultOrZero("policies").(string))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -803,7 +803,7 @@ func (b *backend) pathAppSecretIDNumUsesDelete(req *logical.Request, data *frame
 		return nil, nil
 	}
 
-	app.SecretIDNumUses = data.Get("secret_id_num_uses").(int)
+	app.SecretIDNumUses = data.GetDefaultOrZero("secret_id_num_uses").(int)
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -864,7 +864,7 @@ func (b *backend) pathAppSecretIDTTLDelete(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	app.SecretIDTTL = time.Second * time.Duration(data.Get("secret_id_ttl").(int))
+	app.SecretIDTTL = time.Second * time.Duration(data.GetDefaultOrZero("secret_id_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -928,7 +928,7 @@ func (b *backend) pathAppTokenTTLDelete(req *logical.Request, data *framework.Fi
 		return nil, nil
 	}
 
-	app.TokenTTL = time.Second * time.Duration(data.Get("token_ttl").(int))
+	app.TokenTTL = time.Second * time.Duration(data.GetDefaultOrZero("token_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -992,7 +992,7 @@ func (b *backend) pathAppTokenMaxTTLDelete(req *logical.Request, data *framework
 		return nil, nil
 	}
 
-	app.TokenMaxTTL = time.Second * time.Duration(data.Get("token_max_ttl").(int))
+	app.TokenMaxTTL = time.Second * time.Duration(data.GetDefaultOrZero("token_max_ttl").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
