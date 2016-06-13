@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -38,6 +39,9 @@ type appStorageEntry struct {
 
 	// A constraint, if set, requires 'secret_id' credential to be presented during login
 	BindSecretID bool `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
+
+	// A constraint, if set, specifies the CIDR blocks from which logins should be allowed
+	BindCIDRList string `json:"bind_cidr_list" structs:"bind_cidr_list" mapstructure:"bind_cidr_list"`
 }
 
 // appPaths creates all the paths that are used to register and manage an App.
@@ -76,6 +80,11 @@ func appPaths(b *backend) []*framework.Path {
 					Type:        framework.TypeBool,
 					Default:     true,
 					Description: "Impose secret_id to be presented when logging in using this App. Defaults to 'true'.",
+				},
+				"bind_cidr_list": &framework.FieldSchema{
+					Type: framework.TypeString,
+					Description: `Comma separated list of CIDR blocks, if set, specifies blocks of IP
+addresses which can perform the login operation`,
 				},
 				"policies": &framework.FieldSchema{
 					Type:        framework.TypeString,
@@ -129,6 +138,27 @@ func appPaths(b *backend) []*framework.Path {
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-policies"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-policies"][1]),
+		},
+		&framework.Path{
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/bind-cidr-list$",
+			Fields: map[string]*framework.FieldSchema{
+				"app_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the App.",
+				},
+				"bind_cidr_list": &framework.FieldSchema{
+					Type: framework.TypeString,
+					Description: `Comma separated list of CIDR blocks, if set, specifies blocks of IP
+addresses which can perform the login operation`,
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.UpdateOperation: b.pathAppBindCIDRListUpdate,
+				logical.ReadOperation:   b.pathAppBindCIDRListRead,
+				logical.DeleteOperation: b.pathAppBindCIDRListDelete,
+			},
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-bind-cidr-list"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-bind-cidr-list"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/bind-secret-id$",
@@ -432,6 +462,15 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		app.BindSecretID = data.Get("bind_secret_id").(bool)
 	}
 
+	if bindCIDRListRaw, ok := data.GetOk("bind_cidr_list"); ok {
+		app.BindCIDRList = strings.TrimSpace(bindCIDRListRaw.(string))
+	} else if req.Operation == logical.CreateOperation {
+		app.BindCIDRList = data.Get("bind_cidr_list").(string)
+	}
+	if err = validateCIDRList(app.BindCIDRList); err != nil {
+		return logical.ErrorResponse(fmt.Sprintf("failed to validate CIDR blocks: %s", err)), nil
+	}
+
 	if policiesRaw, ok := data.GetOk("policies"); ok {
 		app.Policies = policyutil.ParsePolicies(policiesRaw.(string))
 	} else if req.Operation == logical.CreateOperation {
@@ -480,6 +519,21 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 
 	// Store the entry.
 	return resp, b.setAppEntry(req.Storage, appName, app)
+}
+
+// Checks if all the CIDR blocks in the comma separated list are valid by parsing it.
+func validateCIDRList(cidrList string) error {
+	if cidrList == "" {
+		return nil
+	}
+
+	cidrBlocks := strings.Split(cidrList, ",")
+	for _, block := range cidrBlocks {
+		if _, _, err := net.ParseCIDR(strings.TrimSpace(block)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // pathAppRead grabs a read lock and reads the options set on the App from the storage
@@ -603,6 +657,70 @@ func (b *backend) pathAppSecretIDHMACDelete(req *logical.Request, data *framewor
 	defer lock.Unlock()
 
 	return nil, req.Storage.Delete(entryIndex)
+}
+
+func (b *backend) pathAppBindCIDRListUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	if bindCIDRListRaw, ok := data.GetOk("bind_cidr_list"); ok {
+		app.BindCIDRList = strings.TrimSpace(bindCIDRListRaw.(string))
+		if err = validateCIDRList(app.BindCIDRList); err != nil {
+			return logical.ErrorResponse(fmt.Sprintf("failed to validate CIDR blocks: %s", err)), nil
+		}
+		return nil, b.setAppEntry(req.Storage, appName, app)
+	} else {
+		return logical.ErrorResponse("missing bind_cidr_list"), nil
+	}
+}
+
+func (b *backend) pathAppBindCIDRListRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	if app, err := b.appEntry(req.Storage, strings.ToLower(appName)); err != nil {
+		return nil, err
+	} else if app == nil {
+		return nil, nil
+	} else {
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"bind_cidr_list": app.BindCIDRList,
+			},
+		}, nil
+	}
+}
+
+func (b *backend) pathAppBindCIDRListDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	// Deleting a field implies setting the value to it's default value.
+	app.BindCIDRList = data.GetDefaultOrZero("bind_cidr_list").(string)
+
+	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
 func (b *backend) pathAppBindSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -1066,6 +1184,13 @@ configured using the parameters of this endpoint.`,
 		"Impose secret_id to be presented during login using this App.",
 		`By setting this to 'true', during login the parameter 'secret_id' becomes a mandatory argument.
 The value of 'secret_id' can be retrieved using 'app/<app_name>/secret-id' endpoint.`,
+	},
+	"app-bind-cidr-list": {
+		`Comma separated list of CIDR blocks, if set, specifies blocks of IP
+addresses which can perform the login operation`,
+		`During login, the IP address of the client will be checked to see if it
+belongs to the CIDR blocks specified. If CIDR blocks were set and if the
+IP is not encompassed by it, login fails`,
 	},
 	"app-policies": {
 		"Policies of the App.",

@@ -263,6 +263,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
+		"bind_cidr_list":     "127.0.0.1/32,127.0.0.1/16",
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -289,6 +290,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
+		"bind_cidr_list":     "127.0.0.1/32,127.0.0.1/16",
 	}
 	var expectedStruct appStorageEntry
 	err = mapstructure.Decode(expected, &expectedStruct)

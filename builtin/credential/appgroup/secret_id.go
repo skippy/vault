@@ -5,11 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hashicorp/vault/helper/policyutil"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -34,19 +34,6 @@ type secretIDStorageEntry struct {
 
 	// The time in UTC representing the last time this storage entry was modified
 	LastUpdatedTime time.Time `json:"last_updated_time" structs:"last_updated_time" mapstructure:"last_updated_time"`
-}
-
-// validationResponse will be the result of credentials verification performed during login.
-// This contains information that either needs to be returned to the client or information
-// required to be stored as metadata in the response, and/or the information required to
-// create the client token.
-type validationResponse struct {
-	SelectorID   string        `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
-	HMACKey      string        `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
-	TokenTTL     time.Duration `json:"token_ttl" structs:"token_ttl" mapstructure:"token_ttl"`
-	TokenMaxTTL  time.Duration `json:"token_max_ttl" structs:"token_max_ttl" mapstructure:"token_max_ttl"`
-	Policies     []string      `json:"policies" structs:"policies" mapstructure:"policies"`
-	BindSecretID bool          `json:"bind_secret_id" structs:"bind_secret_id" mapstructure:"bind_secret_id"`
 }
 
 // selectorStorageEntry represents the reverse mapping from the selector
@@ -100,60 +87,7 @@ func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*select
 	return &result, nil
 }
 
-// Identifies the supplied selector ID and validates it, checks if the supplied
-// secret ID has a corresponding entry in the backend and udpates the use count
-// if needed.
-func (b *backend) validateCredentials(s logical.Storage, data *framework.FieldData) (*validationResponse, error) {
-	// SelectorID must be supplied during every login
-	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
-	if selectorID == "" {
-		return nil, fmt.Errorf("missing selector_id")
-	}
-
-	// First validate the selector ID. Based on which type the selector
-	// belongs to, the validationResp will contain all the information
-	// required to continue the credential verification. Based on which
-	// binds are set, continue the verification process.
-	validationResp, err := b.validateSelectorID(s, selectorID)
-	if err != nil {
-		return nil, err
-	}
-	if validationResp == nil {
-		return nil, fmt.Errorf("failed to validate selector_id")
-	}
-
-	// If 'bind_secret_id' was set on app, look for the field 'secret_id'
-	// to be specified and validate it.
-	if validationResp.BindSecretID {
-		secretID := strings.TrimSpace(data.Get("secret_id").(string))
-		if secretID == "" {
-			return nil, fmt.Errorf("missing secret_id")
-		}
-
-		// Check if the secret ID supplied is valid. If use limit was specified
-		// on the secret ID, it will be decremented in this call.
-		valid, err := b.validateBindSecretID(s, selectorID, secretID, validationResp.HMACKey)
-		if err != nil {
-			return nil, err
-		}
-		if !valid {
-			return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
-		}
-	} else {
-		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one")
-	}
-
-	// As and when more binds are supported, add additional verification process
-
-	return validationResp, nil
-}
-
-// validateSelectorID checks if there is a storage entry that maps the selector ID
-// to app. If it finds a mapping, then a validation response is
-// returned containing a generic set of information that is used to perform further
-// verification of credentials supplied and the information required to authenticate
-// the request.
-func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*validationResponse, error) {
+func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*appStorageEntry, error) {
 	// Look for the storage entry that maps the selectorID to app
 	selector, err := b.selectorIDEntry(s, selectorID)
 	if err != nil {
@@ -163,9 +97,6 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 		return nil, fmt.Errorf("failed to find selector for selector_id:%s\n", selectorID)
 	}
 
-	resp := &validationResponse{}
-
-	// Get the properties of App and populate the response
 	app, err := b.appEntry(s, selector.Name)
 	if err != nil {
 		return nil, err
@@ -173,24 +104,79 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*val
 	if app == nil {
 		return nil, fmt.Errorf("app %s referred by the secret ID does not exist", selector.Name)
 	}
-	resp.Policies = app.Policies
-	resp.TokenTTL = app.TokenTTL
-	resp.TokenMaxTTL = app.TokenMaxTTL
-	resp.SelectorID = app.SelectorID
-	resp.HMACKey = app.HMACKey
-	resp.BindSecretID = app.BindSecretID
 
-	// Cap the token_ttl and token_max_ttl values.
-	resp.TokenTTL, resp.TokenMaxTTL, err = b.SanitizeTTL(resp.TokenTTL, resp.TokenMaxTTL)
+	return app, nil
+}
+
+// Identifies the supplied selector ID and validates it, checks if the supplied
+// secret ID has a corresponding entry in the backend and udpates the use count
+// if needed.
+func (b *backend) validateCredentials(req *logical.Request, data *framework.FieldData) (*appStorageEntry, error) {
+	// SelectorID must be supplied during every login
+	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
+	if selectorID == "" {
+		return nil, fmt.Errorf("missing selector_id")
+	}
+
+	// Validate the selector ID and get the app entry
+	app, err := b.validateSelectorID(req.Storage, selectorID)
 	if err != nil {
 		return nil, err
 	}
 
-	// The policies in response will have duplicates. Clean it up, and add 'default'
-	// policy if not added already.
-	resp.Policies = policyutil.SanitizePolicies(resp.Policies, true)
+	// Calculate the TTL boundaries since this reflects the properties of the token issued
+	if app.TokenTTL, app.TokenMaxTTL, err = b.SanitizeTTL(app.TokenTTL, app.TokenMaxTTL); err != nil {
+		return nil, err
+	}
 
-	return resp, nil
+	// Ensure at least one bind criterion is set here, other than bind_cidr_list, which is optional.
+	if !app.BindSecretID {
+		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one")
+	}
+
+	// Take actions based on the set bind options
+
+	// If 'bind_cidr_list' was set, verify the CIDR restrictions
+	if app.BindCIDRList != "" {
+		cidrBlocks := strings.Split(app.BindCIDRList, ",")
+		for _, block := range cidrBlocks {
+			_, cidr, err := net.ParseCIDR(block)
+			if err != nil {
+				return nil, fmt.Errorf("invalid cidr: %s", err)
+			}
+
+			var addr string
+			if req.Connection != nil {
+				addr = req.Connection.RemoteAddr
+			}
+			if addr == "" || !cidr.Contains(net.ParseIP(addr)) {
+				return nil, fmt.Errorf("unauthorized source address")
+			}
+		}
+	}
+
+	// If 'bind_secret_id' was set on app, look for the field 'secret_id'
+	// to be specified and validate it.
+	if app.BindSecretID {
+		secretID := strings.TrimSpace(data.Get("secret_id").(string))
+		if secretID == "" {
+			return nil, fmt.Errorf("missing secret_id")
+		}
+
+		// Check if the secret ID supplied is valid. If use limit was specified
+		// on the secret ID, it will be decremented in this call.
+		valid, err := b.validateBindSecretID(req.Storage, selectorID, secretID, app.HMACKey)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
+		}
+	}
+
+	// As and when more binds are supported, add additional verification process
+
+	return app, nil
 }
 
 // validateBindSecretID is used to determine if the given secret ID is a valid one.

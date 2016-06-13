@@ -30,7 +30,7 @@ func pathLogin(b *backend) *framework.Path {
 }
 
 func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	validateResp, err := b.validateCredentials(req.Storage, data)
+	validateResp, err := b.validateCredentials(req, data)
 	if err != nil || validateResp == nil {
 		return logical.ErrorResponse(fmt.Sprintf("failed to validate secret ID: %s", err)), nil
 	}
@@ -56,12 +56,12 @@ func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData
 		return nil, fmt.Errorf("failed to fetch selector_id during renewal")
 	}
 
-	resp, err := b.validateSelectorID(req.Storage, selectorID)
+	app, err := b.validateSelectorID(req.Storage, selectorID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate selector during renewal:%s", err)
 	}
 
-	return framework.LeaseExtend(resp.TokenTTL, resp.TokenMaxTTL, b.System())(req, data)
+	return framework.LeaseExtend(app.TokenTTL, app.TokenMaxTTL, b.System())(req, data)
 }
 
 const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'secret_id'."
