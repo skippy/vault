@@ -244,6 +244,33 @@ func (b *backend) pathLoginUpdate(
 		return logical.ErrorResponse("role entry not found"), nil
 	}
 
+	// Verify that the AMI ID of the instance trying to login matches the
+	// AMI ID specified as a constraint on the role.
+	if roleEntry.BoundAmiID != "" && identityDoc.AmiID != roleEntry.BoundAmiID {
+		return logical.ErrorResponse(fmt.Sprintf("AMI ID '%s' does not belong to role '%s'", identityDoc.AmiID, roleName)), nil
+	}
+
+	// Verify that the AccountID of the instance trying to login matches the
+	// AccountID specified as a constraint on the role.
+	if roleEntry.BoundAccountID != "" && identityDoc.AccountID != roleEntry.BoundAccountID {
+		return logical.ErrorResponse(fmt.Sprintf("Account ID '%s' does not belong to role '%s'", identityDoc.AccountID, roleName)), nil
+	}
+
+	// Check if the IAM Role ARN of the instance trying to login matches the
+	// IAM Role ARN specified as a constraint on the role.
+	if roleEntry.BoundIamARN != "" {
+		if instanceDesc.Reservations[0].Instances[0].IamInstanceProfile == nil {
+			return nil, fmt.Errorf("IAM Instance Profile in the instance description is nil")
+		}
+		if instanceDesc.Reservations[0].Instances[0].IamInstanceProfile.Arn == nil {
+			return nil, fmt.Errorf("ARN in the instance description is nil")
+		}
+		iamRoleArn := *instanceDesc.Reservations[0].Instances[0].IamInstanceProfile.Arn
+		if iamRoleArn != roleEntry.BoundIamARN {
+			return logical.ErrorResponse(fmt.Sprintf("IAM Role ARN %s does not belong to role %s", iamRoleArn, roleName)), nil
+		}
+	}
+
 	// Get the entry from the identity whitelist, if there is one.
 	storedIdentity, err := whitelistIdentityEntry(req.Storage, identityDoc.InstanceID)
 	if err != nil {
@@ -478,12 +505,15 @@ func (b *backend) pathLoginRenew(
 	// Cross check that the instance is still in 'running' state
 	_, err := b.validateInstance(req.Storage, instanceID, region)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify instance ID: %s", err)
+		return nil, fmt.Errorf("failed to verify instance ID '%s': %s", instanceID, err)
 	}
 
 	storedIdentity, err := whitelistIdentityEntry(req.Storage, instanceID)
 	if err != nil {
 		return nil, err
+	}
+	if storedIdentity == nil {
+		return nil, fmt.Errorf("failed to verify the whitelist identity entry for instance ID: %s", instanceID)
 	}
 
 	// Ensure that role entry is not deleted.
@@ -536,6 +566,7 @@ type identityDocument struct {
 	Tags        map[string]interface{} `json:"tags,omitempty" structs:"tags" mapstructure:"tags"`
 	InstanceID  string                 `json:"instanceId,omitempty" structs:"instanceId" mapstructure:"instanceId"`
 	AmiID       string                 `json:"imageId,omitempty" structs:"imageId" mapstructure:"imageId"`
+	AccountID   string                 `json:"accountId,omitempty" structs:"accountId" mapstructure:"accountId"`
 	Region      string                 `json:"region,omitempty" structs:"region" mapstructure:"region"`
 	PendingTime string                 `json:"pendingTime,omitempty" structs:"pendingTime" mapstructure:"pendingTime"`
 }

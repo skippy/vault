@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/vault/api"
@@ -35,13 +36,14 @@ type AuthCommand struct {
 }
 
 func (c *AuthCommand) Run(args []string) int {
-	var method string
+	var method, authPath string
 	var methods, methodHelp, noVerify bool
 	flags := c.Meta.FlagSet("auth", meta.FlagSetDefault)
 	flags.BoolVar(&methods, "methods", false, "")
 	flags.BoolVar(&methodHelp, "method-help", false, "")
 	flags.BoolVar(&noVerify, "no-verify", false, "")
 	flags.StringVar(&method, "method", "", "method")
+	flags.StringVar(&authPath, "path", "", "")
 	flags.Usage = func() { c.Ui.Error(c.Help()) }
 	if err := flags.Parse(args); err != nil {
 		return 1
@@ -146,6 +148,10 @@ func (c *AuthCommand) Run(args []string) int {
 		c.Ui.Error(fmt.Sprintf(
 			"Error initializing client to auth: %s", err))
 		return 1
+	}
+
+	if authPath != "" {
+		vars["mount"] = authPath
 	}
 
 	// Authenticate
@@ -266,11 +272,19 @@ func (c *AuthCommand) listMethods() int {
 	}
 	sort.Strings(paths)
 
-	columns := []string{"Path | Type | Description"}
-	for _, k := range paths {
-		a := auth[k]
+	columns := []string{"Path | Type | Default TTL | Max TTL | Description"}
+	for _, path := range paths {
+		auth := auth[path]
+		defTTL := "system"
+		if auth.Config.DefaultLeaseTTL != 0 {
+			defTTL = strconv.Itoa(auth.Config.DefaultLeaseTTL)
+		}
+		maxTTL := "system"
+		if auth.Config.MaxLeaseTTL != 0 {
+			maxTTL = strconv.Itoa(auth.Config.MaxLeaseTTL)
+		}
 		columns = append(columns, fmt.Sprintf(
-			"%s | %s | %s", k, a.Type, a.Description))
+			"%s | %s | %s | %s | %s", path, auth.Type, defTTL, maxTTL, auth.Description))
 	}
 
 	c.Ui.Output(columnize.SimpleFormat(columns))
@@ -298,10 +312,14 @@ Usage: vault auth [options] [token or config...]
   "vault write". Specify the "-method-help" flag to get help for a specific
   method.
 
-  If you've mounted a credential backend to a different path, such
-  as mounting "github" to "github-private", the "method" flag should
-  still be "github." Most credential providers support the "mount" option
-  to specify the mount point. See the "-method-help" for more info.
+  If an auth backend is enabled at a different path, such as enabling
+  "github" at "github-private", the "method" flag should still be "github".
+  The flag "-path" should be used to specify the path at which the auth
+  backend is enabled. For example:
+  "vault auth -method=github -path=github-private token=<github_token>"
+  The value of the "path" flag will be supplied to auth providers
+  as the "mount" option in the payload to specify the mount point.
+  See the "-method-help" for more info.
 
 General Options:
 
@@ -320,6 +338,9 @@ Auth Options:
   -no-verify        Do not verify the token after creation; avoids a use count
                     decrement.
 
+  -path             The path at which the auth backend is enabled. If an auth
+                    backend is mounted at multiple paths, this option can be
+                    used to authenticate against specific paths.
 `
 	return strings.TrimSpace(helpText)
 }
