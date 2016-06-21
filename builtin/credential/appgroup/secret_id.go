@@ -18,6 +18,11 @@ import (
 // secretIDStorageEntry represents the information stored in storage when a SecretID is created.
 // The structure of the SecretID storage entry is the same for all the types of SecretIDs generated.
 type secretIDStorageEntry struct {
+	// Accessor for the secret ID. Accessor is nothing but a secondary index for the SecretID.
+	// This uniquely identifies the SecretID it belongs to and hence can be used for listing
+	// and deleting SecretIDs. Accessors cannot be used as valid selectors during login.
+	Accessor string `json:"accessor" structs:"accessor" mapstructure:"accessor"`
+
 	// Number of times this SecretID can be used to perform the login operation
 	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
