@@ -10,35 +10,50 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/helper/strutil"
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
 )
 
-// secretIDStorageEntry represents the information stored in storage when a SecretID is created.
-// The structure of the SecretID storage entry is the same for all the types of SecretIDs generated.
+// secretIDStorageEntry represents the information stored in storage
+// when a SecretID is created. The structure of the SecretID storage
+// entry is the same for all the types of SecretIDs generated.
 type secretIDStorageEntry struct {
-	// Accessor for the secret ID. Accessor is nothing but a secondary index for the SecretID.
-	// This uniquely identifies the SecretID it belongs to and hence can be used for listing
-	// and deleting SecretIDs. Accessors cannot be used as valid selectors during login.
-	Accessor string `json:"accessor" structs:"accessor" mapstructure:"accessor"`
+	// Accessor for the secret ID. It is a random UUID serving as
+	// a secondary index for the SecretID. This uniquely identifies
+	// the SecretID it belongs to and hence can be used for listing
+	// and deleting SecretIDs. Accessors cannot be used as valid
+	// selectors during login.
+	SecretIDAccessor string `json:"secret_id_accessor" structs:"secret_id_accessor" mapstructure:"secret_id_accessor"`
 
 	// Number of times this SecretID can be used to perform the login operation
 	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
-	// Duration after which this SecretID should expire. This is capped by the backend mount's
-	// max TTL value.
+	// Duration after which this SecretID should expire. This is
+	// capped by the backend mount's max TTL value.
 	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
 
 	// The time in UTC when the SecretID was created
 	CreationTime time.Time `json:"creation_time" structs:"creation_time" mapstructure:"creation_time"`
 
-	// The time in UTC when the SecretID becomes eligible for tidy operation.
-	// Tidying is performed by the PeriodicFunc of the backend which is 1 minute apart.
+	// The time in UTC when the SecretID becomes eligible for tidy
+	// operation. Tidying is performed by the PeriodicFunc of the
+	// backend which is 1 minute apart.
 	ExpirationTime time.Time `json:"expiration_time" structs:"expiration_time" mapstructure:"expiration_time"`
 
 	// The time in UTC representing the last time this storage entry was modified
 	LastUpdatedTime time.Time `json:"last_updated_time" structs:"last_updated_time" mapstructure:"last_updated_time"`
+}
+
+// Represents the payload of the storage entry of the accessor that maps to a unique
+// SecretID. Note that SecretIDs should never be stored in plaintext anywhere in the
+// backend. HashedSecretID will be used as an index to fetch the properties of the
+// SecretID and to delete the SecretID.
+type secretIDAccessorStorageEntry struct {
+	// Hash of the SecretID which can be used to find the storage index at which
+	// properties of SecretID is stored.
+	HashedSecretID string `json:"hashed_secret_id" structs:"hashed_secret_id" mapstructure:"hashed_secret_id"`
 }
 
 // selectorStorageEntry represents the reverse mapping from the selector
@@ -362,10 +377,64 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 		secretEntry.ExpirationTime = currentTime.Add(secretEntry.SecretIDTTL)
 	}
 
+	// Before storing the SecretID, store its accessor.
+	if err := b.createAccessor(s, secretEntry, hashedSecretID); err != nil {
+		return err
+	}
+
 	if entry, err := logical.StorageEntryJSON(entryIndex, secretEntry); err != nil {
 		return err
 	} else if err = s.Put(entry); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// selectorIDEntry is used to read the storage entry that maps the
+// selector ID to an App. This method should be called when the lock
+// for the corresponding secret ID is held.
+func (b *backend) secretIDAccessorEntry(s logical.Storage, secretIDAccessor string) (*secretIDAccessorStorageEntry, error) {
+	if secretIDAccessor == "" {
+		return nil, fmt.Errorf("missing secretIDAccessor")
+	}
+
+	var result secretIDAccessorStorageEntry
+
+	// Create index entry, mapping the accessor to the token ID
+	entryIndex := "accessor/" + b.salt.SaltID(secretIDAccessor)
+
+	if entry, err := s.Get(entryIndex); err != nil {
+		return nil, err
+	} else if entry == nil {
+		return nil, nil
+	} else if err := entry.DecodeJSON(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// createAccessor creates an identifier for the SecretID. A storage index,
+// mapping the accessor to the SecretID is also created.
+// This method should be called when the lock for the corresponding secret ID
+// is held.
+func (b *backend) createAccessor(s logical.Storage, entry *secretIDStorageEntry, hashedSecretID string) error {
+	// Create a random accessor
+	accessorUUID, err := uuid.GenerateUUID()
+	if err != nil {
+		return err
+	}
+	entry.SecretIDAccessor = accessorUUID
+
+	// Create index entry, mapping the accessor to the token ID
+	entryIndex := "accessor/" + b.salt.SaltID(entry.SecretIDAccessor)
+	if entry, err := logical.StorageEntryJSON(entryIndex, &secretIDAccessorStorageEntry{
+		HashedSecretID: hashedSecretID,
+	}); err != nil {
+		return err
+	} else if err = s.Put(entry); err != nil {
+		return fmt.Errorf("failed to persist accessor index entry: %s", err)
 	}
 
 	return nil

@@ -291,20 +291,20 @@ addresses which can perform the login operation`,
 			HelpDescription: strings.TrimSpace(appHelp["app-secret-id"][1]),
 		},
 		&framework.Path{
-			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id/" + framework.GenericNameRegex("secret_id_hmac"),
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/secret-id/" + framework.GenericNameRegex("secret_id_accessor"),
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
 				},
-				"secret_id_hmac": &framework.FieldSchema{
+				"secret_id_accessor": &framework.FieldSchema{
 					Type:        framework.TypeString,
-					Description: "HMAC of the secret ID",
+					Description: "Accessor of the secret ID",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.ReadOperation:   b.pathAppSecretIDHMACRead,
-				logical.DeleteOperation: b.pathAppSecretIDHMACDelete,
+				logical.ReadOperation:   b.pathAppSecretIDAccessorRead,
+				logical.DeleteOperation: b.pathAppSecretIDAccessorDelete,
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id-hmac"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-hmac"][1]),
@@ -373,12 +373,33 @@ func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.Fiel
 	lock.RLock()
 	defer lock.RUnlock()
 
-	secrets, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
+	hashedSecretIDs, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
 	if err != nil {
 		return nil, err
 	}
 
-	return logical.ListResponse(secrets), nil
+	var listItems []string
+	for _, hashedSecretID := range hashedSecretIDs {
+		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+		lock := b.secretIDLock(hashedSecretID)
+		lock.RLock()
+
+		result := secretIDStorageEntry{}
+		if entry, err := req.Storage.Get(entryIndex); err != nil {
+			lock.RUnlock()
+			return nil, err
+		} else if entry == nil {
+			lock.RUnlock()
+			return nil, fmt.Errorf("storage entry for secret ID is present but no content found at the index")
+		} else if err := entry.DecodeJSON(&result); err != nil {
+			lock.RUnlock()
+			return nil, err
+		}
+		lock.RUnlock()
+		listItems = append(listItems, result.SecretIDAccessor)
+	}
+
+	return logical.ListResponse(listItems), nil
 }
 
 // setAppEntry grabs a write lock and stores the options on an App into the storage
@@ -592,15 +613,15 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	return nil, nil
 }
 
-func (b *backend) pathAppSecretIDHMACRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDAccessorRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
 	}
 
-	hashedSecretID := data.Get("secret_id_hmac").(string)
-	if hashedSecretID == "" {
-		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	secretIDAccessor := data.Get("secret_id_accessor").(string)
+	if secretIDAccessor == "" {
+		return logical.ErrorResponse("missing secret_id_accessor"), nil
 	}
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
@@ -611,9 +632,17 @@ func (b *backend) pathAppSecretIDHMACRead(req *logical.Request, data *framework.
 		return nil, fmt.Errorf("app %s does not exist", appName)
 	}
 
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+	accessorEntry, err := b.secretIDAccessorEntry(req.Storage, secretIDAccessor)
+	if err != nil {
+		return nil, err
+	}
+	if accessorEntry == nil {
+		return nil, fmt.Errorf("failed to find accessor entry for secret_id_accessor:%s\n", secretIDAccessor)
+	}
 
-	lock := b.secretIDLock(hashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.HashedSecretID)
+
+	lock := b.secretIDLock(accessorEntry.HashedSecretID)
 	lock.RLock()
 	defer lock.RUnlock()
 
@@ -631,15 +660,15 @@ func (b *backend) pathAppSecretIDHMACRead(req *logical.Request, data *framework.
 	}, nil
 }
 
-func (b *backend) pathAppSecretIDHMACDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDAccessorDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
 	}
 
-	hashedSecretID := data.Get("secret_id_hmac").(string)
-	if hashedSecretID == "" {
-		return logical.ErrorResponse("missing secret_id_hmac"), nil
+	secretIDAccessor := data.Get("secret_id_accessor").(string)
+	if secretIDAccessor == "" {
+		return logical.ErrorResponse("missing secret_id_accessor"), nil
 	}
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
@@ -650,9 +679,17 @@ func (b *backend) pathAppSecretIDHMACDelete(req *logical.Request, data *framewor
 		return nil, fmt.Errorf("app %s does not exist", appName)
 	}
 
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+	accessorEntry, err := b.secretIDAccessorEntry(req.Storage, secretIDAccessor)
+	if err != nil {
+		return nil, err
+	}
+	if accessorEntry == nil {
+		return nil, fmt.Errorf("failed to find accessor entry for secret_id_accessor:%s\n", secretIDAccessor)
+	}
 
-	lock := b.secretIDLock(hashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.HashedSecretID)
+
+	lock := b.secretIDLock(accessorEntry.HashedSecretID)
 	lock.Lock()
 	defer lock.Unlock()
 
