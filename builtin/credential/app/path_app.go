@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -282,10 +283,15 @@ addresses which can perform the login operation`,
 					Type:        framework.TypeString,
 					Description: "Name of the App.",
 				},
+				"metadata": &framework.FieldSchema{
+					Type: framework.TypeString,
+					Description: `Metadata that should be tied to the secret ID. This should be a JSON
+formatted string`,
+				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
-				logical.ReadOperation: b.pathAppSecretIDRead,
-				logical.ListOperation: b.pathAppSecretIDList,
+				logical.UpdateOperation: b.pathAppSecretIDUpdate,
+				logical.ListOperation:   b.pathAppSecretIDList,
 			},
 			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id"][0]),
 			HelpDescription: strings.TrimSpace(appHelp["app-secret-id"][1]),
@@ -1152,7 +1158,7 @@ func (b *backend) pathAppTokenMaxTTLDelete(req *logical.Request, data *framework
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
 
-func (b *backend) pathAppSecretIDRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathAppSecretIDUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	secretID, err := uuid.GenerateUUID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SecretID:%s", err)
@@ -1186,10 +1192,23 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 		return logical.ErrorResponse("bind_secret_id is not set on the app"), nil
 	}
 
-	if err = b.registerSecretIDEntry(req.Storage, app.SelectorID, secretID, app.HMACKey, &secretIDStorageEntry{
+	secretIDStorage := &secretIDStorageEntry{
 		SecretIDNumUses: app.SecretIDNumUses,
 		SecretIDTTL:     app.SecretIDTTL,
-	}); err != nil {
+	}
+
+	//var secretIDMetadata map[string]string
+	metadata := data.Get("metadata").(string)
+	if metadata != "" {
+		json.Unmarshal([]byte(metadata), &secretIDStorage.Metadata)
+		for key, value := range secretIDStorage.Metadata {
+			if key != "" && value == "" {
+				return logical.ErrorResponse(fmt.Sprintf("metadata should only contain <key,value> inputs as JSON; invalid value for key '%s'", key)), nil
+			}
+		}
+	}
+
+	if err = b.registerSecretIDEntry(req.Storage, app.SelectorID, secretID, app.HMACKey, secretIDStorage); err != nil {
 		return nil, fmt.Errorf("failed to store secret ID: %s", err)
 	}
 

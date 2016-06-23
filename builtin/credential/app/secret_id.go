@@ -44,6 +44,9 @@ type secretIDStorageEntry struct {
 
 	// The time in UTC representing the last time this storage entry was modified
 	LastUpdatedTime time.Time `json:"last_updated_time" structs:"last_updated_time" mapstructure:"last_updated_time"`
+
+	// Metadata that belongs to the SecretID.
+	Metadata map[string]string `json:"metadata" structs:"metadata" mapstructure:"metadata"`
 }
 
 // Represents the payload of the storage entry of the accessor that maps to a unique
