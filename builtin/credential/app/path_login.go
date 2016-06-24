@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/vault/logical"
 	"github.com/hashicorp/vault/logical/framework"
@@ -30,24 +31,33 @@ func pathLogin(b *backend) *framework.Path {
 }
 
 func (b *backend) pathLoginUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	validateResp, err := b.validateCredentials(req, data)
-	if err != nil || validateResp == nil {
+	app, err := b.validateCredentials(req, data)
+	if err != nil || app == nil {
 		return logical.ErrorResponse(fmt.Sprintf("failed to validate secret ID: %s", err)), nil
 	}
 
-	resp := &logical.Response{
-		Auth: &logical.Auth{
-			InternalData: map[string]interface{}{
-				"selector_id": validateResp.SelectorID,
-			},
-			Policies: validateResp.Policies,
-			LeaseOptions: logical.LeaseOptions{
-				TTL:       validateResp.TokenTTL,
-				Renewable: true,
-			},
+	auth := &logical.Auth{
+		Period: app.Period,
+		InternalData: map[string]interface{}{
+			"selector_id": app.SelectorID,
+		},
+		Policies: app.Policies,
+		LeaseOptions: logical.LeaseOptions{
+			Renewable: true,
 		},
 	}
-	return resp, nil
+
+	// If 'Period' is set, use the value of 'Period' as the TTL.
+	// Otherwise, set the normal TokenTTL
+	if app.Period > time.Duration(0) {
+		auth.TTL = app.Period
+	} else {
+		auth.TTL = app.TokenTTL
+	}
+
+	return &logical.Response{
+		Auth: auth,
+	}, nil
 }
 
 func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
@@ -61,7 +71,17 @@ func (b *backend) pathLoginRenew(req *logical.Request, data *framework.FieldData
 		return nil, fmt.Errorf("failed to validate selector during renewal:%s", err)
 	}
 
-	return framework.LeaseExtend(app.TokenTTL, app.TokenMaxTTL, b.System())(req, data)
+	// If 'Period' is set on the App, the token should never expire.
+	// Replenish the TTL with 'Period's value. If 'Period' was updated
+	// after the token was issued, token will bear the updated 'Period'
+	// value as its TTL.
+	if app.Period > time.Duration(0) {
+		req.Auth.TTL = app.Period
+		return &logical.Response{Auth: req.Auth}, nil
+	} else {
+		return framework.LeaseExtend(app.TokenTTL, app.TokenMaxTTL, b.System())(req, data)
+	}
+
 }
 
 const pathLoginHelpSys = "Issue a token for a given pair of 'selector' and 'secret_id'."

@@ -24,7 +24,7 @@ func TestBackend_app_login(t *testing.T) {
 	selectorID := resp.Data["selector_id"]
 
 	appSecretIDReq := &logical.Request{
-		Operation: logical.ReadOperation,
+		Operation: logical.UpdateOperation,
 		Path:      "app/app1/secret-id",
 		Storage:   storage,
 	}

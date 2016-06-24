@@ -17,7 +17,7 @@ func TestBackend_app_delete_secret_id(t *testing.T) {
 
 	createApp(t, b, storage, "app1", "a,b")
 	secretIDReq := &logical.Request{
-		Operation: logical.ReadOperation,
+		Operation: logical.UpdateOperation,
 		Storage:   storage,
 		Path:      "app/app1/secret-id",
 	}
@@ -71,7 +71,7 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 
 	createApp(t, b, storage, "app1", "a,b")
 	secretIDReq := &logical.Request{
-		Operation: logical.ReadOperation,
+		Operation: logical.UpdateOperation,
 		Storage:   storage,
 		Path:      "app/app1/secret-id",
 	}
@@ -129,7 +129,7 @@ func TestBackend_app_list_secret_id(t *testing.T) {
 	createApp(t, b, storage, "app1", "a,b")
 
 	secretIDReq := &logical.Request{
-		Operation: logical.ReadOperation,
+		Operation: logical.UpdateOperation,
 		Storage:   storage,
 		Path:      "app/app1/secret-id",
 	}
@@ -223,7 +223,7 @@ func TestBackend_app_secret_id(t *testing.T) {
 	}
 
 	appSecretIDReq := &logical.Request{
-		Operation: logical.ReadOperation,
+		Operation: logical.UpdateOperation,
 		Path:      "app/app1/secret-id",
 		Storage:   storage,
 	}
@@ -509,6 +509,46 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	if resp.Data["secret_id_ttl"].(time.Duration) != 0 {
+		t.Fatalf("expected value to be reset")
+	}
+
+	// RUD for 'period' field
+	appReq.Path = "app/app1/period"
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Data = map[string]interface{}{"period": 9001}
+	appReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["period"].(time.Duration) != 9001 {
+		t.Fatalf("bad: period: expected:9001 actual:%d\n", resp.Data["9001"].(time.Duration))
+	}
+	appReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	appReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(appReq)
+	if err != nil || (resp != nil && resp.IsError()) {
+		t.Fatalf("err:%v resp:%#v", err, resp)
+	}
+
+	if resp.Data["period"].(time.Duration) != 0 {
 		t.Fatalf("expected value to be reset")
 	}
 

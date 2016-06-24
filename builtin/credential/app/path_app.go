@@ -43,6 +43,13 @@ type appStorageEntry struct {
 
 	// A constraint, if set, specifies the CIDR blocks from which logins should be allowed
 	BindCIDRList string `json:"bind_cidr_list" structs:"bind_cidr_list" mapstructure:"bind_cidr_list"`
+
+	// Period, if set,  indicates that the token generated using this App
+	// should never expire. The token should be renewed within the duration
+	// specified by this value. The renewal duration will be fixed. If
+	// the `Period` in the App is modified, the token will pick up the
+	// new value during its next renewal.
+	Period time.Duration `json:"period" mapstructure:"period" structs:"period"`
 }
 
 // appPaths creates all the paths that are used to register and manage an App.
@@ -107,6 +114,15 @@ addresses which can perform the login operation`,
 				"token_max_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
 					Description: "Duration in seconds after which the issued token should not be allowed to be renewed.",
+				},
+				"period": &framework.FieldSchema{
+					Type:    framework.TypeDurationSecond,
+					Default: 0,
+					Description: `If set,  indicates that the token generated using this App
+should never expire. The token should be renewed within the
+duration specified by this value. The renewal duration will
+be fixed. If the Period in the App is modified, the token
+will pick up the new value during its next renewal.`,
 				},
 			},
 			ExistenceCheck: b.pathAppExistenceCheck,
@@ -223,6 +239,32 @@ addresses which can perform the login operation`,
 			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-ttl"][1]),
 		},
 		&framework.Path{
+			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/period$",
+			Fields: map[string]*framework.FieldSchema{
+				"app_name": &framework.FieldSchema{
+					Type:        framework.TypeString,
+					Description: "Name of the App.",
+				},
+				"period": &framework.FieldSchema{
+					Type:    framework.TypeDurationSecond,
+					Default: 0,
+					Description: `If set,  indicates that the token generated using this App
+should never expire. The token should be renewed within the
+duration specified by this value. The renewal duration will
+be fixed. If the Period in the App is modified, the token
+will pick up the new value during its next renewal.`,
+				},
+			},
+			Callbacks: map[logical.Operation]framework.OperationFunc{
+				logical.UpdateOperation: b.pathAppPeriodUpdate,
+				logical.ReadOperation:   b.pathAppPeriodRead,
+				logical.DeleteOperation: b.pathAppPeriodDelete,
+			},
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-period"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-period"][1]),
+		},
+
+		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/token-ttl$",
 			Fields: map[string]*framework.FieldSchema{
 				"app_name": &framework.FieldSchema{
@@ -325,6 +367,11 @@ formatted string`,
 				"secret_id": &framework.FieldSchema{
 					Type:        framework.TypeString,
 					Description: "SecretID to be attached to the App.",
+				},
+				"metadata": &framework.FieldSchema{
+					Type: framework.TypeString,
+					Description: `Metadata that should be tied to the secret ID. This should be a JSON
+formatted string`,
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -504,6 +551,16 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		app.Policies = policyutil.ParsePolicies(data.Get("policies").(string))
 	}
 
+	periodRaw, ok := data.GetOk("period")
+	if ok {
+		app.Period = time.Second * time.Duration(periodRaw.(int))
+	} else if req.Operation == logical.CreateOperation {
+		app.Period = time.Second * time.Duration(data.Get("period").(int))
+	}
+	if app.Period > b.System().MaxLeaseTTL() {
+		return logical.ErrorResponse(fmt.Sprintf("'period' of '%s' is greater than the backend's maximum lease TTL of '%s'", app.Period.String(), b.System().MaxLeaseTTL().String())), nil
+	}
+
 	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
 		app.SecretIDNumUses = numUsesRaw.(int)
 	} else if req.Operation == logical.CreateOperation {
@@ -576,9 +633,10 @@ func (b *backend) pathAppRead(req *logical.Request, data *framework.FieldData) (
 		return nil, nil
 	} else {
 		// Convert the 'time.Duration' values to second.
-		app.SecretIDTTL = app.SecretIDTTL / time.Second
-		app.TokenTTL = app.TokenTTL / time.Second
-		app.TokenMaxTTL = app.TokenMaxTTL / time.Second
+		app.SecretIDTTL /= time.Second
+		app.TokenTTL /= time.Second
+		app.TokenMaxTTL /= time.Second
+		app.Period /= time.Second
 
 		// Create a map of data to be returned and remove sensitive information from it
 		data := structs.New(app).Map()
@@ -1002,7 +1060,7 @@ func (b *backend) pathAppSecretIDTTLRead(req *logical.Request, data *framework.F
 	} else if app == nil {
 		return nil, nil
 	} else {
-		app.SecretIDTTL = app.SecretIDTTL / time.Second
+		app.SecretIDTTL /= time.Second
 		return &logical.Response{
 			Data: map[string]interface{}{
 				"secret_id_ttl": app.SecretIDTTL,
@@ -1026,6 +1084,70 @@ func (b *backend) pathAppSecretIDTTLDelete(req *logical.Request, data *framework
 	}
 
 	app.SecretIDTTL = time.Second * time.Duration(data.GetDefaultOrZero("secret_id_ttl").(int))
+
+	return nil, b.setAppEntry(req.Storage, appName, app)
+}
+
+func (b *backend) pathAppPeriodUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	if periodRaw, ok := data.GetOk("period"); ok {
+		app.Period = time.Second * time.Duration(periodRaw.(int))
+		if app.Period > b.System().MaxLeaseTTL() {
+			return logical.ErrorResponse(fmt.Sprintf("'period' of '%s' is greater than the backend's maximum lease TTL of '%s'", app.Period.String(), b.System().MaxLeaseTTL().String())), nil
+		}
+		return nil, b.setAppEntry(req.Storage, appName, app)
+	} else {
+		return logical.ErrorResponse("missing period"), nil
+	}
+}
+
+func (b *backend) pathAppPeriodRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	if app, err := b.appEntry(req.Storage, strings.ToLower(appName)); err != nil {
+		return nil, err
+	} else if app == nil {
+		return nil, nil
+	} else {
+		app.Period /= time.Second
+		return &logical.Response{
+			Data: map[string]interface{}{
+				"period": app.Period,
+			},
+		}, nil
+	}
+}
+
+func (b *backend) pathAppPeriodDelete(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	appName := data.Get("app_name").(string)
+	if appName == "" {
+		return logical.ErrorResponse("missing app_name"), nil
+	}
+
+	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
+	if err != nil {
+		return nil, err
+	}
+	if app == nil {
+		return nil, nil
+	}
+
+	app.Period = time.Second * time.Duration(data.GetDefaultOrZero("period").(int))
 
 	return nil, b.setAppEntry(req.Storage, appName, app)
 }
@@ -1066,7 +1188,7 @@ func (b *backend) pathAppTokenTTLRead(req *logical.Request, data *framework.Fiel
 	} else if app == nil {
 		return nil, nil
 	} else {
-		app.TokenTTL = app.TokenTTL / time.Second
+		app.TokenTTL /= time.Second
 		return &logical.Response{
 			Data: map[string]interface{}{
 				"token_ttl": app.TokenTTL,
@@ -1130,7 +1252,7 @@ func (b *backend) pathAppTokenMaxTTLRead(req *logical.Request, data *framework.F
 	} else if app == nil {
 		return nil, nil
 	} else {
-		app.TokenMaxTTL = app.TokenMaxTTL / time.Second
+		app.TokenMaxTTL /= time.Second
 		return &logical.Response{
 			Data: map[string]interface{}{
 				"token_max_ttl": app.TokenMaxTTL,
@@ -1317,5 +1439,13 @@ the App. This SecretID will behave similarly to the SecretIDs generated by
 the backend. The properties of this SecretID will be based on the options
 set on the App. It will expire after a period defined by the 'secret_id_ttl'
 option on the App and/or the backend mount's maximum TTL value.`,
+	},
+	"app-period": {
+		"Updates the value of 'period' on the App",
+		`If set,  indicates that the token generated using this App
+should never expire. The token should be renewed within the
+duration specified by this value. The renewal duration will
+be fixed. If the Period in the App is modified, the token
+will pick up the new value during its next renewal.`,
 	},
 }
