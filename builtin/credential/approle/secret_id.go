@@ -1,4 +1,4 @@
-package app
+package approle
 
 import (
 	"crypto/hmac"
