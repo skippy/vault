@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -482,19 +481,17 @@ func (b *backend) fetchPolicies(s logical.Storage, apps []string) ([]string, err
 // SelectorID.
 func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) error {
 	// Acquire the custom lock to perform listing of SecretIDs
-	lock := b.secretIDLock("")
-	lock.Lock()
-	defer lock.Unlock()
+	customLock := b.secretIDLock("")
+	customLock.RLock()
+	defer customLock.RUnlock()
 	hashedSecretIDs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
 	if err != nil {
 		return err
 	}
 	for _, hashedSecretID := range hashedSecretIDs {
 		// Acquire the lock belonging to the SecretID
-		log.Printf("trying lock for %s\n", hashedSecretID)
-		lock = b.secretIDLock(hashedSecretID)
+		lock := b.secretIDLock(hashedSecretID)
 		lock.Lock()
-		log.Printf("flush hashedSecretIDLock acquired\n")
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 		if err := s.Delete(entryIndex); err != nil {
 			lock.Unlock()

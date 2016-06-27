@@ -2,7 +2,6 @@ package approle
 
 import (
 	"fmt"
-	"strconv"
 	"sync"
 
 	"github.com/hashicorp/vault/helper/salt"
@@ -74,8 +73,9 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 	// and SecretIDs. These locks can be accessed by indexing based on the first two
 	// characters of a randomly generated UUID.
 	for i := int64(0); i < 256; i++ {
-		b.selectorIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
-		b.secretIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
+		index := fmt.Sprintf("%02x", i)
+		b.selectorIDLocksMap[index] = &sync.RWMutex{}
+		b.secretIDLocksMap[index] = &sync.RWMutex{}
 	}
 
 	// Have an extra lock to use in case the indexing does not result in a lock.
