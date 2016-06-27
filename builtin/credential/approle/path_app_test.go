@@ -113,11 +113,11 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 
 	hmacReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(hmacReq)
-	if err != nil || (resp != nil && resp.IsError()) {
-		t.Fatalf("err:%v resp:%#v", err, resp)
+	if resp != nil && resp.IsError() {
+		t.Fatalf("error response:%#v", err, resp)
 	}
-	if resp != nil {
-		t.Fatalf("expected a nil response")
+	if err == nil {
+		t.Fatalf("expected an error")
 	}
 }
 

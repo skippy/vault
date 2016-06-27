@@ -547,7 +547,7 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 			SelectorID: selectorID,
 			HMACKey:    hmacKey,
 		}
-	} else {
+	} else if app == nil {
 		return nil, fmt.Errorf("App entry not found when the requested operation is to update it")
 	}
 
