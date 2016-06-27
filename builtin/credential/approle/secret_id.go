@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -74,7 +75,9 @@ func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selec
 	lock.Lock()
 	defer lock.Unlock()
 
-	entry, err := logical.StorageEntryJSON("selector/"+selectorID, selectorEntry)
+	entryIndex := "selector/" + b.salt.SaltID(selectorID)
+
+	entry, err := logical.StorageEntryJSON(entryIndex, selectorEntry)
 	if err != nil {
 		return err
 	}
@@ -96,7 +99,9 @@ func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*select
 
 	var result selectorIDStorageEntry
 
-	if entry, err := s.Get("selector/" + selectorID); err != nil {
+	entryIndex := "selector/" + b.salt.SaltID(selectorID)
+
+	if entry, err := s.Get(entryIndex); err != nil {
 		return nil, err
 	} else if entry == nil {
 		return nil, nil
@@ -105,6 +110,22 @@ func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*select
 	}
 
 	return &result, nil
+}
+
+// selectorIDEntryDelete is used to remove the secondary index that maps the
+// SelectorID to the App itself.
+func (b *backend) selectorIDEntryDelete(s logical.Storage, selectorID string) error {
+	if selectorID == "" {
+		return fmt.Errorf("missing selectorID")
+	}
+
+	lock := b.selectorIDLock(selectorID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	entryIndex := "selector/" + b.salt.SaltID(selectorID)
+
+	return s.Delete(entryIndex)
 }
 
 // Checks if the App represented by the SelectorID still exists
@@ -255,8 +276,12 @@ func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, 
 	// the storage but do not fail the validation request. Subsequest
 	// requests to use the same SecretID will fail.
 	if result.SecretIDNumUses == 1 {
+		accessorEntryIndex := "accessor/" + b.salt.SaltID(result.SecretIDAccessor)
+		if err := s.Delete(accessorEntryIndex); err != nil {
+			return false, fmt.Errorf("failed to delete accessor storage entry: %s", err)
+		}
 		if err := s.Delete(entryIndex); err != nil {
-			return false, err
+			return false, fmt.Errorf("failed to delete SecretID: %s", err)
 		}
 	} else {
 		// If the use count is greater than one, decrement it and update the last updated time.
@@ -466,8 +491,10 @@ func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) err
 	}
 	for _, hashedSecretID := range hashedSecretIDs {
 		// Acquire the lock belonging to the SecretID
+		log.Printf("trying lock for %s\n", hashedSecretID)
 		lock = b.secretIDLock(hashedSecretID)
 		lock.Lock()
+		log.Printf("flush hashedSecretIDLock acquired\n")
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 		if err := s.Delete(entryIndex); err != nil {
 			lock.Unlock()

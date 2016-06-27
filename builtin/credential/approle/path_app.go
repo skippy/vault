@@ -673,10 +673,15 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 
 	// Just before the app is deleted, remove all the SecretIDs issued as part of the app.
 	if err = b.flushSelectorSecrets(req.Storage, app.SelectorID); err != nil {
-		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app %s", appName)
+		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app '%s': %s", appName, err)
 	}
 
-	// After deleting the SecretIDs, delete the App itself
+	// Delete the reverse mapping from SelectorID to the App
+	if err = b.selectorIDEntryDelete(req.Storage, app.SelectorID); err != nil {
+		return nil, fmt.Errorf("failed to delete the mapping from SelectorID to app '%s': %s", appName, err)
+	}
+
+	// After deleting the SecretIDs and the SelectorID, delete the App itself
 	if err = req.Storage.Delete("app/" + strings.ToLower(appName)); err != nil {
 		return nil, err
 	}
@@ -768,12 +773,23 @@ func (b *backend) pathAppSecretIDAccessorDelete(req *logical.Request, data *fram
 	}
 
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.HashedSecretID)
+	accessorEntryIndex := "accessor/" + b.salt.SaltID(secretIDAccessor)
 
 	lock := b.secretIDLock(accessorEntry.HashedSecretID)
 	lock.Lock()
 	defer lock.Unlock()
 
-	return nil, req.Storage.Delete(entryIndex)
+	// Delete the accessor of the SecretID first
+	if err := req.Storage.Delete(accessorEntryIndex); err != nil {
+		return nil, fmt.Errorf("failed to delete accessor storage entry: %s", err)
+	}
+
+	// Delete the storage entry that corresponds to the SecretID
+	if err := req.Storage.Delete(entryIndex); err != nil {
+		return nil, fmt.Errorf("failed to delete SecretID: %s", err)
+	}
+
+	return nil, nil
 }
 
 func (b *backend) pathAppBindCIDRListUpdate(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
