@@ -16,20 +16,23 @@ import (
 
 // appStorageEntry stores all the options that are set on an App
 type appStorageEntry struct {
-	// UUID that uniquely represents this App. This serves as a credential to perform
-	// login using this App.
+	// UUID that uniquely represents this App. This serves as a credential
+	// to perform login using this App.
 	SelectorID string `json:"selector_id" structs:"selector_id" mapstructure:"selector_id"`
 
-	// UUID that serves as the HMAC key for the hashing the 'secret_id's of the App
+	// UUID that serves as the HMAC key for the hashing the 'secret_id's
+	// of the App
 	HMACKey string `json:"hmac_key" structs:"hmac_key" mapstructure:"hmac_key"`
 
-	// Policies that are to be required by the token to access the App
+	// Policies that are to be required by the token to access this App
 	Policies []string `json:"policies" structs:"policies" mapstructure:"policies"`
 
-	// Number of times the SecretID generated against the App can be used to perform login
+	// Number of times the SecretID generated against this App can be
+	// used to perform login operation
 	SecretIDNumUses int `json:"secret_id_num_uses" structs:"secret_id_num_uses" mapstructure:"secret_id_num_uses"`
 
-	// Duration (less than the backend mount's max TTL) after which a SecretID generated against the App will expire
+	// Duration (less than the backend mount's max TTL) after which a
+	// SecretID generated against the App will expire
 	SecretIDTTL time.Duration `json:"secret_id_ttl" structs:"secret_id_ttl" mapstructure:"secret_id_ttl"`
 
 	// Duration before which an issued token must be renewed
@@ -44,11 +47,11 @@ type appStorageEntry struct {
 	// A constraint, if set, specifies the CIDR blocks from which logins should be allowed
 	BindCIDRList string `json:"bind_cidr_list" structs:"bind_cidr_list" mapstructure:"bind_cidr_list"`
 
-	// Period, if set,  indicates that the token generated using this App
+	// Period, if set, indicates that the token generated using this App
 	// should never expire. The token should be renewed within the duration
-	// specified by this value. The renewal duration will be fixed. If
-	// the `Period` in the App is modified, the token will pick up the
-	// new value during its next renewal.
+	// specified by this value. The renewal duration will be fixed if the
+	// value is not modified on the App. If the `Period` in the App is modified,
+	// a token will pick up the new value during its next renewal.
 	Period time.Duration `json:"period" mapstructure:"period" structs:"period"`
 }
 
@@ -63,10 +66,11 @@ type appStorageEntry struct {
 // app/<app_name>/token-ttl - For updating the param
 // app/<app_name>/token-max-ttl - For updating the param
 // app/<app_name>/bind-secret-id - For updating the param
+// app/<app_name>/period - For updating the param
 // app/<app_name>/selector-id - For fetching the selector_id of an App
-// app/<app_name>/secret-id - For issuing a secret_id against an App, also to list the hashed secret_ids
-// app/<app_name>/secret-id/<secret_id_hmac> - For reading the properties of, or deleting a secret_id
-// app/<app_name>/custom-secret-id - For assigning a custom secret ID against an App
+// app/<app_name>/secret-id - For issuing a secret_id against an App, also to list the secret_id_accessorss
+// app/<app_name>/secret-id/<secret_id_accessor> - For reading the properties of, or deleting a secret_id
+// app/<app_name>/custom-secret-id - For assigning a custom SecretID against an App
 func appPaths(b *backend) []*framework.Path {
 	return []*framework.Path{
 		&framework.Path{
@@ -101,7 +105,7 @@ addresses which can perform the login operation`,
 				},
 				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a SecretID can access the App, after which it will expire.",
+					Description: "Number of times a SecretID can access the App, after which the SecretID will expire.",
 				},
 				"secret_id_ttl": &framework.FieldSchema{
 					Type:        framework.TypeDurationSecond,
@@ -118,11 +122,12 @@ addresses which can perform the login operation`,
 				"period": &framework.FieldSchema{
 					Type:    framework.TypeDurationSecond,
 					Default: 0,
-					Description: `If set,  indicates that the token generated using this App
+					Description: `If set, indicates that the token generated using this App
 should never expire. The token should be renewed within the
 duration specified by this value. The renewal duration will
-be fixed. If the Period in the App is modified, the token
-will pick up the new value during its next renewal.`,
+be fixed, if this value is not modified. If the Period in the
+App is modified, the token will pick up the new value during
+its next renewal.`,
 				},
 			},
 			ExistenceCheck: b.pathAppExistenceCheck,
@@ -207,7 +212,7 @@ addresses which can perform the login operation`,
 				},
 				"secret_id_num_uses": &framework.FieldSchema{
 					Type:        framework.TypeInt,
-					Description: "Number of times the a SecretID can access the App, after which it will expire.",
+					Description: "Number of times a SecretID can access the App, after which the SecretID will expire.",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -248,11 +253,12 @@ addresses which can perform the login operation`,
 				"period": &framework.FieldSchema{
 					Type:    framework.TypeDurationSecond,
 					Default: 0,
-					Description: `If set,  indicates that the token generated using this App
+					Description: `If set, indicates that the token generated using this App
 should never expire. The token should be renewed within the
 duration specified by this value. The renewal duration will
-be fixed. If the Period in the App is modified, the token
-will pick up the new value during its next renewal.`,
+be fixed if this value is not modified. If the Period in the
+App is modified, the token will pick up the new value during
+its next renewal.`,
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -327,8 +333,8 @@ will pick up the new value during its next renewal.`,
 				},
 				"metadata": &framework.FieldSchema{
 					Type: framework.TypeString,
-					Description: `Metadata that should be tied to the secret ID. This should be a JSON
-formatted string`,
+					Description: `Metadata that should be tied to the SecretID. This should be a JSON
+formatted string containing the metadata in key value pairs.`,
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -347,15 +353,15 @@ formatted string`,
 				},
 				"secret_id_accessor": &framework.FieldSchema{
 					Type:        framework.TypeString,
-					Description: "Accessor of the secret ID",
+					Description: "Accessor of the SecretID",
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
 				logical.ReadOperation:   b.pathAppSecretIDAccessorRead,
 				logical.DeleteOperation: b.pathAppSecretIDAccessorDelete,
 			},
-			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id-hmac"][0]),
-			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-hmac"][1]),
+			HelpSynopsis:    strings.TrimSpace(appHelp["app-secret-id-accessor"][0]),
+			HelpDescription: strings.TrimSpace(appHelp["app-secret-id-accessor"][1]),
 		},
 		&framework.Path{
 			Pattern: "app/" + framework.GenericNameRegex("app_name") + "/custom-secret-id$",
@@ -370,8 +376,8 @@ formatted string`,
 				},
 				"metadata": &framework.FieldSchema{
 					Type: framework.TypeString,
-					Description: `Metadata that should be tied to the secret ID. This should be a JSON
-formatted string`,
+					Description: `Metadata that should be tied to the SecretID. This should be a JSON
+formatted string containing metadata in key value pairs.`,
 				},
 			},
 			Callbacks: map[logical.Operation]framework.OperationFunc{
@@ -396,7 +402,6 @@ func (b *backend) pathAppExistenceCheck(req *logical.Request, data *framework.Fi
 func (b *backend) pathAppList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	b.appLock.RLock()
 	defer b.appLock.RUnlock()
-
 	apps, err := req.Storage.List("app/")
 	if err != nil {
 		return nil, err
@@ -404,15 +409,14 @@ func (b *backend) pathAppList(req *logical.Request, data *framework.FieldData) (
 	return logical.ListResponse(apps), nil
 }
 
-// pathAppSecretIDList is used to list all the 'secret_id's issued against the App.
-// The 'secret_id's will not be returned in plaintext. Instead the HMAC-ed 'secret_id's
-// will be returned.
+// pathAppSecretIDList is used to list all the 'secret_id_accessor's issued against the App.
 func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
 		return logical.ErrorResponse("missing app_name"), nil
 	}
 
+	// Get the app entry
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
 	if err != nil {
 		return nil, err
@@ -421,11 +425,15 @@ func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.Fiel
 		return logical.ErrorResponse(fmt.Sprintf("app %s does not exist", appName)), nil
 	}
 
-	// Get the "custom" lock
+	// If the argument to secretIDLock does not start with 2 hex
+	// chars, a generic lock is returned. So, passing empty string
+	// to get the "custom" lock that could be used for listing.
 	lock := b.secretIDLock("")
 	lock.RLock()
 	defer lock.RUnlock()
 
+	// Listing works one level at a time. Get the first level of data
+	// which could then be used to get the actual SecretID storage entries.
 	hashedSecretIDs, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
 	if err != nil {
 		return nil, err
@@ -433,7 +441,15 @@ func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.Fiel
 
 	var listItems []string
 	for _, hashedSecretID := range hashedSecretIDs {
+		// Prepare the full index of the SecretIDs.
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+
+		// SecretID locks are not indexed by SecretIDs itself.
+		// This is because SecretIDs are not stored in plaintext
+		// form anywhere in the backend, and hence accessing its
+		// corresponding lock many times using SecretIDs is not
+		// possible. Also, indexing it everywhere using hashedSecretIDs
+		// makes listing operation easier.
 		lock := b.secretIDLock(hashedSecretID)
 		lock.RLock()
 
@@ -443,23 +459,25 @@ func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.Fiel
 			return nil, err
 		} else if entry == nil {
 			lock.RUnlock()
-			return nil, fmt.Errorf("storage entry for secret ID is present but no content found at the index")
+			return nil, fmt.Errorf("storage entry for SecretID is present but no content found at the index")
 		} else if err := entry.DecodeJSON(&result); err != nil {
 			lock.RUnlock()
 			return nil, err
 		}
-		lock.RUnlock()
 		listItems = append(listItems, result.SecretIDAccessor)
+		lock.RUnlock()
 	}
 
 	return logical.ListResponse(listItems), nil
 }
 
-// setAppEntry grabs a write lock and stores the options on an App into the storage
+// setAppEntry grabs a write lock and stores the options on an App into the storage.
+// Also creates a reverse index from the App's SelectorID to the App itself.
 func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorageEntry) error {
 	b.appLock.Lock()
 	defer b.appLock.Unlock()
 
+	// Create a storage entry for the App
 	entry, err := logical.StorageEntryJSON("app/"+strings.ToLower(appName), app)
 	if err != nil {
 		return err
@@ -471,7 +489,8 @@ func (b *backend) setAppEntry(s logical.Storage, appName string, app *appStorage
 		return err
 	}
 
-	// Create a selector ID reverse mapping entry for the App
+	// Create a storage entry for reverse mapping of SelectorID to App.
+	// Note that secondary index is created when the appLock is held.
 	return b.setSelectorIDEntry(s, app.SelectorID, &selectorIDStorageEntry{
 		Type: "app",
 		Name: appName,
@@ -508,14 +527,14 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		return logical.ErrorResponse("missing app_name"), nil
 	}
 
-	// Fetch or create an entry for the app
+	// Check if the App already exists
 	app, err := b.appEntry(req.Storage, appName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a new entry object if this is a CreateOperation
-	if app == nil {
+	if app == nil && req.Operation == logical.CreateOperation {
 		selectorID, err := uuid.GenerateUUID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create selector_id: %s\n", err)
@@ -528,6 +547,8 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 			SelectorID: selectorID,
 			HMACKey:    hmacKey,
 		}
+	} else {
+		return nil, fmt.Errorf("App entry not found when the requested operation is to update it")
 	}
 
 	if bindSecretIDRaw, ok := data.GetOk("bind_secret_id"); ok {
@@ -561,8 +582,8 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		return logical.ErrorResponse(fmt.Sprintf("'period' of '%s' is greater than the backend's maximum lease TTL of '%s'", app.Period.String(), b.System().MaxLeaseTTL().String())), nil
 	}
 
-	if numUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
-		app.SecretIDNumUses = numUsesRaw.(int)
+	if secretIDNumUsesRaw, ok := data.GetOk("secret_id_num_uses"); ok {
+		app.SecretIDNumUses = secretIDNumUsesRaw.(int)
 	} else if req.Operation == logical.CreateOperation {
 		app.SecretIDNumUses = data.Get("secret_id_num_uses").(int)
 	}
@@ -588,7 +609,7 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 		app.TokenMaxTTL = time.Second * time.Duration(data.Get("token_max_ttl").(int))
 	}
 
-	// Check that the TokenMaxTTL value provided is less than the TokenMaxTTL.
+	// Check that the TokenTTL value provided is less than the TokenMaxTTL.
 	// Sanitizing the TTL and MaxTTL is not required now and can be performed
 	// at credential issue time.
 	if app.TokenMaxTTL > time.Duration(0) && app.TokenTTL > app.TokenMaxTTL {
@@ -603,21 +624,6 @@ func (b *backend) pathAppCreateUpdate(req *logical.Request, data *framework.Fiel
 
 	// Store the entry.
 	return resp, b.setAppEntry(req.Storage, appName, app)
-}
-
-// Checks if all the CIDR blocks in the comma separated list are valid by parsing it.
-func validateCIDRList(cidrList string) error {
-	if cidrList == "" {
-		return nil
-	}
-
-	cidrBlocks := strings.Split(cidrList, ",")
-	for _, block := range cidrBlocks {
-		if _, _, err := net.ParseCIDR(strings.TrimSpace(block)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // pathAppRead grabs a read lock and reads the options set on the App from the storage
@@ -665,11 +671,12 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	b.appLock.Lock()
 	defer b.appLock.Unlock()
 
-	// Just before the app is deleted, remove all the secrets issued as part of the app.
+	// Just before the app is deleted, remove all the SecretIDs issued as part of the app.
 	if err = b.flushSelectorSecrets(req.Storage, app.SelectorID); err != nil {
 		return nil, fmt.Errorf("failed to invalidate the secrets belonging to app %s", appName)
 	}
 
+	// After deleting the SecretIDs, delete the App itself
 	if err = req.Storage.Delete("app/" + strings.ToLower(appName)); err != nil {
 		return nil, err
 	}
@@ -677,6 +684,7 @@ func (b *backend) pathAppDelete(req *logical.Request, data *framework.FieldData)
 	return nil, nil
 }
 
+// Returns the properties of the SecretID
 func (b *backend) pathAppSecretIDAccessorRead(req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	appName := data.Get("app_name").(string)
 	if appName == "" {
@@ -687,6 +695,10 @@ func (b *backend) pathAppSecretIDAccessorRead(req *logical.Request, data *framew
 	if secretIDAccessor == "" {
 		return logical.ErrorResponse("missing secret_id_accessor"), nil
 	}
+
+	// SecretID is indexed based on salted SelectorID and HMACed SecretID.
+	// Get the App details to fetch the SelectorID and accessor to get
+	// the HMAC-ed SecretID.
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
 	if err != nil {
@@ -734,6 +746,10 @@ func (b *backend) pathAppSecretIDAccessorDelete(req *logical.Request, data *fram
 	if secretIDAccessor == "" {
 		return logical.ErrorResponse("missing secret_id_accessor"), nil
 	}
+
+	// SecretID is indexed based on salted SelectorID and HMACed SecretID.
+	// Get the App details to fetch the SelectorID and accessor to get
+	// the HMAC-ed SecretID.
 
 	app, err := b.appEntry(req.Storage, strings.ToLower(appName))
 	if err != nil {
@@ -1310,6 +1326,8 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 		return logical.ErrorResponse(fmt.Sprintf("app %s does not exist", appName)), nil
 	}
 
+	// Currently, only one type of bind is implemented.
+	// Ensure that it is enabled.
 	if !app.BindSecretID {
 		return logical.ErrorResponse("bind_secret_id is not set on the app"), nil
 	}
@@ -1319,7 +1337,6 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 		SecretIDTTL:     app.SecretIDTTL,
 	}
 
-	//var secretIDMetadata map[string]string
 	metadata := data.Get("metadata").(string)
 	if metadata != "" {
 		json.Unmarshal([]byte(metadata), &secretIDStorage.Metadata)
@@ -1330,15 +1347,31 @@ func (b *backend) handleAppSecretIDCommon(req *logical.Request, data *framework.
 		}
 	}
 
-	if err = b.registerSecretIDEntry(req.Storage, app.SelectorID, secretID, app.HMACKey, secretIDStorage); err != nil {
-		return nil, fmt.Errorf("failed to store secret ID: %s", err)
+	if secretIDStorage, err = b.registerSecretIDEntry(req.Storage, app.SelectorID, secretID, app.HMACKey, secretIDStorage); err != nil {
+		return nil, fmt.Errorf("failed to store SecretID: %s", err)
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"secret_id": secretID,
+			"secret_id":          secretID,
+			"secret_id_accessor": secretIDStorage.SecretIDAccessor,
 		},
 	}, nil
+}
+
+// Checks if all the CIDR blocks in the comma separated list are valid by parsing it.
+func validateCIDRList(cidrList string) error {
+	if cidrList == "" {
+		return nil
+	}
+
+	cidrBlocks := strings.Split(cidrList, ",")
+	for _, block := range cidrBlocks {
+		if _, _, err := net.ParseCIDR(strings.TrimSpace(block)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var appHelp = map[string][2]string{
@@ -1389,14 +1422,14 @@ that are generated against the App using 'app/<app_name>/secret-id' or
 'app/<app_name>/custom-secret-id' endpoints.`,
 		``,
 	},
-	"app-secret-id-hmac": {
+	"app-secret-id-accessor": {
 		"Read or delete a issued secret_id",
 		`This is particularly useful to clean-up the non-expiring 'secret_id's.
 The list operation on the 'app/<app_name>/secret-id' endpoint will return
-the HMACed 'secret_id's. This endpoint can be used to read the properties
-of the secret. If the 'secret_idnum_uses' field in the response is 0, it represents
-a non-expiring 'secret_id'. The same endpoint can be invoked again to delete
-it.`,
+the 'secret_id_accessor's. This endpoint can be used to read the properties
+of the secret. If the 'secret_id_num_uses' field in the response is 0, it
+represents a non-expiring 'secret_id'. This endpoint can be invoked to delete
+the 'secret_id's as well.`,
 	},
 	"app-token-ttl": {
 		`Duration in seconds, the lifetime of the token issued by using the SecretID that

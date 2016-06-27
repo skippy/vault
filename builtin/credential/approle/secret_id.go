@@ -20,9 +20,9 @@ import (
 // when a SecretID is created. The structure of the SecretID storage
 // entry is the same for all the types of SecretIDs generated.
 type secretIDStorageEntry struct {
-	// Accessor for the secret ID. It is a random UUID serving as
+	// Accessor for the SecretID. It is a random UUID serving as
 	// a secondary index for the SecretID. This uniquely identifies
-	// the SecretID it belongs to and hence can be used for listing
+	// the SecretID it belongs to, and hence can be used for listing
 	// and deleting SecretIDs. Accessors cannot be used as valid
 	// selectors during login.
 	SecretIDAccessor string `json:"secret_id_accessor" structs:"secret_id_accessor" mapstructure:"secret_id_accessor"`
@@ -59,8 +59,7 @@ type secretIDAccessorStorageEntry struct {
 	HashedSecretID string `json:"hashed_secret_id" structs:"hashed_secret_id" mapstructure:"hashed_secret_id"`
 }
 
-// selectorStorageEntry represents the reverse mapping from the selector
-// to the respective app that the selectorID belongs to.
+// selectorStorageEntry represents the reverse mapping from SelectorID to App
 type selectorIDStorageEntry struct {
 	// Type of selector: "app"
 	Type string `json:"type" structs:"type" mapstructure:"type"`
@@ -69,8 +68,7 @@ type selectorIDStorageEntry struct {
 	Name string `json:"name" structs:"name" mapstructure:"name"`
 }
 
-// setSelectorIDEntry creates a storage entry that maps the selector ID
-// to an App
+// setSelectorIDEntry creates a storage entry that maps SelectorID to App
 func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selectorEntry *selectorIDStorageEntry) error {
 	lock := b.selectorIDLock(selectorID)
 	lock.Lock()
@@ -86,8 +84,7 @@ func (b *backend) setSelectorIDEntry(s logical.Storage, selectorID string, selec
 	return nil
 }
 
-// selectorIDEntry is used to read the storage entry that maps the selector
-// ID to an App
+// selectorIDEntry is used to read the storage entry that maps SelectorID to App
 func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*selectorIDStorageEntry, error) {
 	if selectorID == "" {
 		return nil, fmt.Errorf("missing selectorID")
@@ -110,6 +107,7 @@ func (b *backend) selectorIDEntry(s logical.Storage, selectorID string) (*select
 	return &result, nil
 }
 
+// Checks if the App represented by the SelectorID still exists
 func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*appStorageEntry, error) {
 	// Look for the storage entry that maps the selectorID to app
 	selector, err := b.selectorIDEntry(s, selectorID)
@@ -125,15 +123,13 @@ func (b *backend) validateSelectorID(s logical.Storage, selectorID string) (*app
 		return nil, err
 	}
 	if app == nil {
-		return nil, fmt.Errorf("app %s referred by the secret ID does not exist", selector.Name)
+		return nil, fmt.Errorf("app %s referred by the SecretID does not exist", selector.Name)
 	}
 
 	return app, nil
 }
 
-// Identifies the supplied selector ID and validates it, checks if the supplied
-// secret ID has a corresponding entry in the backend and udpates the use count
-// if needed.
+// Validates the supplied SelectorID and SecretID
 func (b *backend) validateCredentials(req *logical.Request, data *framework.FieldData) (*appStorageEntry, error) {
 	// SelectorID must be supplied during every login
 	selectorID := strings.TrimSpace(data.Get("selector_id").(string))
@@ -141,7 +137,7 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 		return nil, fmt.Errorf("missing selector_id")
 	}
 
-	// Validate the selector ID and get the app entry
+	// Validate the SelectorID and get the App entry
 	app, err := b.validateSelectorID(req.Storage, selectorID)
 	if err != nil {
 		return nil, err
@@ -152,14 +148,11 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 		return nil, err
 	}
 
-	// Ensure at least one bind criterion is set here, other than bind_cidr_list, which is optional.
-	if !app.BindSecretID {
-		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one")
-	}
-
 	// Take actions based on the set bind options
 
 	// If 'bind_cidr_list' was set, verify the CIDR restrictions
+	// Keep the optional binding parameters outside of the switch
+	// block below.
 	if app.BindCIDRList != "" {
 		cidrBlocks := strings.Split(app.BindCIDRList, ",")
 		for _, block := range cidrBlocks {
@@ -178,16 +171,17 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 		}
 	}
 
+	switch {
 	// If 'bind_secret_id' was set on app, look for the field 'secret_id'
 	// to be specified and validate it.
-	if app.BindSecretID {
+	case app.BindSecretID:
 		secretID := strings.TrimSpace(data.Get("secret_id").(string))
 		if secretID == "" {
 			return nil, fmt.Errorf("missing secret_id")
 		}
 
-		// Check if the secret ID supplied is valid. If use limit was specified
-		// on the secret ID, it will be decremented in this call.
+		// Check if the SecretID supplied is valid. If use limit was specified
+		// on the SecretID, it will be decremented in this call.
 		valid, err := b.validateBindSecretID(req.Storage, selectorID, secretID, app.HMACKey)
 		if err != nil {
 			return nil, err
@@ -195,6 +189,9 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 		if !valid {
 			return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
 		}
+	default:
+		// Ensure at least one bind criterion is set.
+		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one required bind parameter set")
 	}
 
 	// As and when more binds are supported, add additional verification process
@@ -202,13 +199,7 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 	return app, nil
 }
 
-// validateBindSecretID is used to determine if the given secret ID is a valid one.
-// The SecretID is looked to be present only under the sub-view of the selector.
-// This ensures that the SecretIDs that are reused between selector types, the
-// correct one is referred to. If the SecretIDs are always generated by the
-// backend, then there will be no collision between the SecretIDs from different
-// types. But, if 'custom_secret_id's are assigned across different selector types,
-// then it should be supported.
+// validateBindSecretID is used to determine if the given SecretID is a valid one.
 func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
@@ -217,8 +208,8 @@ func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, 
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
 	// SecretID locks are always index based on hashedSecretIDs. This helps
-	// acquiring the locks when the secret IDs are listed. This allows grabbing
-	// the correct locks even if the secret IDs are not known in plaintext.
+	// acquiring the locks when the SecretIDs are listed. This allows grabbing
+	// the correct locks even if the SecretIDs are not known in plaintext.
 	lock := b.secretIDLock(hashedSecretID)
 	lock.RLock()
 
@@ -272,9 +263,9 @@ func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, 
 		result.SecretIDNumUses -= 1
 		result.LastUpdatedTime = time.Now().UTC()
 		if entry, err := logical.StorageEntryJSON(entryIndex, &result); err != nil {
-			return false, fmt.Errorf("failed to decrement the use count for secret ID:%s", secretID)
+			return false, fmt.Errorf("failed to decrement the use count for SecretID:%s", secretID)
 		} else if err = s.Put(entry); err != nil {
-			return false, fmt.Errorf("failed to decrement the use count for secret ID:%s", secretID)
+			return false, fmt.Errorf("failed to decrement the use count for SecretID:%s", secretID)
 		}
 	}
 
@@ -283,7 +274,7 @@ func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, 
 
 // selectorIDLock is used to get a lock from the pre-initialized map
 // of locks. Map is indexed based on the first 2 characters of the
-// selectorID, which is a random UUID. If the input is not hex encoded
+// SelectorID, which is a random UUID. If the input is not hex encoded
 // or if it is empty a "custom" lock will be returned.
 func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
 	var lock *sync.RWMutex
@@ -292,7 +283,7 @@ func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
 		lock, ok = b.selectorIDLocksMap[selectorID[0:2]]
 	}
 	if !ok || lock == nil {
-		// Fall back for custom secret IDs
+		// Fall back for custom SecretIDs
 		lock = b.selectorIDLocksMap["custom"]
 	}
 	return lock
@@ -309,7 +300,7 @@ func (b *backend) secretIDLock(hashedSecretID string) *sync.RWMutex {
 		lock, ok = b.secretIDLocksMap[hashedSecretID[0:2]]
 	}
 	if !ok || lock == nil {
-		// Fall back for custom secret IDs
+		// Fall back for custom SecretIDs
 		lock = b.secretIDLocksMap["custom"]
 	}
 	return lock
@@ -327,10 +318,10 @@ func createHMAC(key, value string) (string, error) {
 }
 
 // registerSecretIDEntry creates a new storage entry for the given SecretID.
-func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretEntry *secretIDStorageEntry) error {
+func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretEntry *secretIDStorageEntry) (*secretIDStorageEntry, error) {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
-		return fmt.Errorf("failed to create HMAC of secret_id: %s", err)
+		return nil, fmt.Errorf("failed to create HMAC of secret_id: %s", err)
 	}
 	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 
@@ -340,11 +331,11 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 	entry, err := s.Get(entryIndex)
 	if err != nil {
 		lock.RUnlock()
-		return err
+		return nil, err
 	}
 	if entry != nil {
 		lock.RUnlock()
-		return fmt.Errorf("secret ID is already registered")
+		return nil, fmt.Errorf("SecretID is already registered")
 	}
 
 	// If there isn't an entry for the secretID already, switch the read lock
@@ -356,10 +347,10 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 	// But before saving a new entry, check if the secretID entry was created during the lock switch.
 	entry, err = s.Get(entryIndex)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if entry != nil {
-		return fmt.Errorf("secret ID is already registered")
+		return nil, fmt.Errorf("SecretID is already registered")
 	}
 
 	// Create a new entry for the SecretID
@@ -382,21 +373,21 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 
 	// Before storing the SecretID, store its accessor.
 	if err := b.createAccessor(s, secretEntry, hashedSecretID); err != nil {
-		return err
+		return nil, err
 	}
 
 	if entry, err := logical.StorageEntryJSON(entryIndex, secretEntry); err != nil {
-		return err
+		return nil, err
 	} else if err = s.Put(entry); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return secretEntry, nil
 }
 
 // selectorIDEntry is used to read the storage entry that maps the
-// selector ID to an App. This method should be called when the lock
-// for the corresponding secret ID is held.
+// SelectorID to an App. This method should be called when the lock
+// for the corresponding SecretID is held.
 func (b *backend) secretIDAccessorEntry(s logical.Storage, secretIDAccessor string) (*secretIDAccessorStorageEntry, error) {
 	if secretIDAccessor == "" {
 		return nil, fmt.Errorf("missing secretIDAccessor")
@@ -419,9 +410,8 @@ func (b *backend) secretIDAccessorEntry(s logical.Storage, secretIDAccessor stri
 }
 
 // createAccessor creates an identifier for the SecretID. A storage index,
-// mapping the accessor to the SecretID is also created.
-// This method should be called when the lock for the corresponding secret ID
-// is held.
+// mapping the accessor to the SecretID is also created. This method should
+// be called when the lock for the corresponding SecretID is held.
 func (b *backend) createAccessor(s logical.Storage, entry *secretIDStorageEntry, hashedSecretID string) error {
 	// Create a random accessor
 	accessorUUID, err := uuid.GenerateUUID()
@@ -463,25 +453,25 @@ func (b *backend) fetchPolicies(s logical.Storage, apps []string) ([]string, err
 	return strutil.RemoveDuplicates(policies), nil
 }
 
-// flushSelectorSecrets deletes all the 'secret_id's that belong to the given
-// selector ID.
+// flushSelectorSecrets deletes all the SecretIDs that belong to the given
+// SelectorID.
 func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) error {
-	// Acquire the custom lock to perform listing of 'secret_id's
+	// Acquire the custom lock to perform listing of SecretIDs
 	lock := b.secretIDLock("")
-	lock.RLock()
+	lock.Lock()
+	defer lock.Unlock()
 	hashedSecretIDs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
 	if err != nil {
 		return err
 	}
-	lock.RUnlock()
 	for _, hashedSecretID := range hashedSecretIDs {
-		// Acquire the lock belonging to the secret ID
+		// Acquire the lock belonging to the SecretID
 		lock = b.secretIDLock(hashedSecretID)
 		lock.Lock()
 		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
 		if err := s.Delete(entryIndex); err != nil {
 			lock.Unlock()
-			return fmt.Errorf("error deleting secret ID %s from storage: %s", hashedSecretID, err)
+			return fmt.Errorf("error deleting SecretID %s from storage: %s", hashedSecretID, err)
 		}
 		lock.Unlock()
 	}

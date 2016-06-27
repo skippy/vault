@@ -30,7 +30,7 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 	if grabbed {
 		defer atomic.StoreUint32(&b.tidySecretIDCASGuard, 0)
 	} else {
-		return fmt.Errorf("secret ID tidy operation already running")
+		return fmt.Errorf("SecretID tidy operation already running")
 	}
 
 	saltedSelectors, err := s.List("secret_id/")
@@ -46,6 +46,8 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 			return err
 		}
 		for _, hashedSecretID := range hashedSecretIDs {
+			// In order to avoid lock swapping in case there is need to delete,
+			// grab the write lock.
 			lock := b.secretIDLock(hashedSecretID)
 			lock.Lock()
 			// saltedSelector will already have a '/' suffix. Don't append another one.
@@ -53,18 +55,18 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 			secretIDEntry, err := s.Get(entryIndex)
 			if err != nil {
 				lock.Unlock()
-				return fmt.Errorf("error fetching secret ID %s: %s", hashedSecretID, err)
+				return fmt.Errorf("error fetching SecretID %s: %s", hashedSecretID, err)
 			}
 
 			if secretIDEntry == nil {
-				result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for secret ID %s is nil", hashedSecretID)))
+				result = multierror.Append(result, errwrap.Wrapf("[ERR] {{err}}", fmt.Errorf("entry for SecretID %s is nil", hashedSecretID)))
 				lock.Unlock()
 				continue
 			}
 
 			if secretIDEntry.Value == nil || len(secretIDEntry.Value) == 0 {
 				lock.Unlock()
-				return fmt.Errorf("found entry for secret ID %s but actual secret ID is empty", hashedSecretID)
+				return fmt.Errorf("found entry for SecretID %s but actual SecretID is empty", hashedSecretID)
 			}
 
 			var result secretIDStorageEntry
@@ -73,11 +75,11 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 				return err
 			}
 
-			// Unset ExpirationTime indicates non-expiring SecretIDs
+			// ExpirationTime not being set indicates non-expiring SecretIDs
 			if !result.ExpirationTime.IsZero() && time.Now().UTC().After(result.ExpirationTime) {
 				if err := s.Delete(entryIndex); err != nil {
 					lock.Unlock()
-					return fmt.Errorf("error deleting secret ID %s from storage: %s", hashedSecretID, err)
+					return fmt.Errorf("error deleting SecretID %s from storage: %s", hashedSecretID, err)
 				}
 			}
 			lock.Unlock()

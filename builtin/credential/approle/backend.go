@@ -20,20 +20,20 @@ type backend struct {
 	// Guard to clean-up the expired SecretID entries
 	tidySecretIDCASGuard uint32
 
-	// Lock to make changes to registered Apps. This is a low-traffic
+	// Lock to make changes to App entries. This is a low-traffic
 	// operation. So, using a single lock would suffice.
 	appLock *sync.RWMutex
 
 	// Map of locks to make changes to the storage entries of SelectorIDs
 	// generated. This will be initiated to a predefined number of locks
 	// when the backend is created, and will be indexed based on the salted
-	// selector IDs.
+	// SelectorIDs.
 	selectorIDLocksMap map[string]*sync.RWMutex
 
 	// Map of locks to make changes to the storage entries of SecretIDs
 	// generated. This will be initiated to a predefined number of locks
 	// when the backend is created, and will be indexed based on the hashed
-	// secret IDs.
+	// SecretIDs.
 	secretIDLocksMap map[string]*sync.RWMutex
 }
 
@@ -69,17 +69,17 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 		secretIDLocksMap: map[string]*sync.RWMutex{},
 	}
 
-	// Create a predefined number (256) of locks. This will avoid a superfluous number
-	// of locks directly proportional to the number of selectorID/secretIDs. These locks
-	// can be accessed by indexing based on the first 2 characters of the selectorID or
-	// the secretID respectively. Since these are randomly generated, uniformity of access
-	// is guaranteed.
+	// Create 256 of locks each for managing SelectorID and SecretIDs. This will avoid
+	// a superfluous number of locks directly proportional to the number of SelectorID
+	// and SecretIDs. These locks can be accessed by indexing based on the first two
+	// characters of a randomly generated UUID.
 	for i := int64(0); i < 256; i++ {
 		b.selectorIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
 		b.secretIDLocksMap[fmt.Sprintf("%2x", strconv.FormatInt(i, 16))] = &sync.RWMutex{}
 	}
 
-	// Have an extra lock, in case the indexing does not result in a lock, this can be used.
+	// Have an extra lock to use in case the indexing does not result in a lock.
+	// This happends if the indexing value is not beginning with hex characters.
 	// These locks can be used for listing purposes as well.
 	b.secretIDLocksMap["custom"] = &sync.RWMutex{}
 	b.selectorIDLocksMap["custom"] = &sync.RWMutex{}
@@ -107,7 +107,7 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 }
 
 // periodicFunc of the backend will be invoked once a minute by the RollbackManager.
-// App backend utilizes this function to delete expired SecretID entries.
+// AppRole backend utilizes this function to delete expired SecretID entries.
 // This could mean that the SecretID may live in the backend upto 1 min after its
 // expiration. The deletion of SecretIDs are not security sensitive and it is okay
 // to delay the removal of SecretIDs by a minute.
@@ -124,5 +124,7 @@ common required credential is the 'selector_id' which is a unique
 identifier of the App. It can be retrieved from the 'app/<appname>/selector-id'
 endpoint.
 
-Currently, there is only one type of bind supported, 'bind_secret_id'.
-This bind requires another credential to be presented, the 'secret_id'.`
+The default bind configuration is 'bind_secret_id', which requires
+the credential 'secret_id' to be presented during login. Refer to
+the documentation for other types of binds. Bind constraints may
+or may not mandate specific credentials during login.`
