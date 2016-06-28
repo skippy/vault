@@ -1,33 +1,45 @@
 ## 0.6.1 (Unreleased)
 
+DEPRECATIONS/BREAKING CHANGES:
+
+ * Issued certificates from the `pki` backend against new roles created after upgrading will contain a set of default key usages. 
+
 FEATURES:
 
- * **Convergent Encryption in Transit**: The `transit` backend now supports a
+ * **Convergent Encryption in `Transit`**: The `transit` backend now supports a
    convergent encryption mode where the same plaintext will produce the same
    ciphertext. Although very useful in some situations, this has security
    implications, which are mostly mitigated by requiring the use of key
    derivation when convergent encryption is enabled. See [the `transit`
    documentation](https://www.vaultproject.io/docs/secrets/transit/index.html)
    for more details. [GH-1537]
+ * **Key Usage Control in `PKI`**: Issued certificates from roles created or
+   modified after upgrading contain a set of default key usages for increased
+   compatibility with OpenVPN and some other software. This set can be changed
+   when writing a role definition. Existing roles are unaffected. [GH-1552]
 
 IMPROVEMENTS:
- * secret/mssql,mysql,postgresql: Reading of connection settings is supported
-   in all the sql backends [GH-1515]
- * credential/aws-ec2: Added a new constraint, 'bound_account_id' to the role
-   [GH-1523]
  * cli: Output formatting in the presence of warnings in the response object
    [GH-1533]
  * cli: `vault auth` command supports a `-path` option to take in the path at
    which the auth backend is enabled, thereby allowing authenticating against
    different paths using the command options [GH-1532]
- * secret/aws: Listing of roles is supported now  [GH-1546]
  * cli: `vault auth -methods` will now display the config settings of the mount
    [GH-1531]
+ * credential/aws-ec2: Added a new constraint, 'bound_account_id' to the role
+   [GH-1523]
+ * secret/aws: Listing of roles is supported now  [GH-1546]
+ * secret/mssql,mysql,postgresql: Reading of connection settings is supported
+   in all the sql backends [GH-1515]
 
 BUG FIXES:
 
  * credential/aws-ec2: Added a nil check for stored whitelist identity object
    during renewal [GH-1542]
+ * core: Fix regression causing status codes to be `400` in most non-5xx error
+   cases [GH-1553]
+ * physical/postgres: Remove use of prepared statements as this causes
+   connection multiplexing software to break [GH-1548]
 
 ## 0.6.0 (June 14th, 2016)
 
