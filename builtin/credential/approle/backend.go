@@ -19,9 +19,9 @@ type backend struct {
 	// Guard to clean-up the expired SecretID entries
 	tidySecretIDCASGuard uint32
 
-	// Lock to make changes to App entries. This is a low-traffic
+	// Lock to make changes to Role entries. This is a low-traffic
 	// operation. So, using a single lock would suffice.
-	appLock *sync.RWMutex
+	roleLock *sync.RWMutex
 
 	// Map of locks to make changes to the storage entries of SelectorIDs
 	// generated. This will be initiated to a predefined number of locks
@@ -58,8 +58,8 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 		// Set the salt object for the backend
 		salt: salt,
 
-		// Create the lock for making changes to the Apps registered with the backend
-		appLock: &sync.RWMutex{},
+		// Create the lock for making changes to the Roles registered with the backend
+		roleLock: &sync.RWMutex{},
 
 		// Create the map of locks to modify the generated SelectorIDs.
 		selectorIDLocksMap: map[string]*sync.RWMutex{},
@@ -79,7 +79,7 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 	}
 
 	// Have an extra lock to use in case the indexing does not result in a lock.
-	// This happends if the indexing value is not beginning with hex characters.
+	// This hroleens if the indexing value is not beginning with hex characters.
 	// These locks can be used for listing purposes as well.
 	b.secretIDLocksMap["custom"] = &sync.RWMutex{}
 	b.selectorIDLocksMap["custom"] = &sync.RWMutex{}
@@ -96,7 +96,7 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 			},
 		},
 		Paths: framework.PathAppend(
-			appPaths(b),
+			rolePaths(b),
 			[]*framework.Path{
 				pathLogin(b),
 				pathTidySecretID(b),
@@ -107,7 +107,7 @@ func Backend(conf *logical.BackendConfig) (*backend, error) {
 }
 
 // periodicFunc of the backend will be invoked once a minute by the RollbackManager.
-// AppRole backend utilizes this function to delete expired SecretID entries.
+// RoleRole backend utilizes this function to delete expired SecretID entries.
 // This could mean that the SecretID may live in the backend upto 1 min after its
 // expiration. The deletion of SecretIDs are not security sensitive and it is okay
 // to delay the removal of SecretIDs by a minute.
@@ -118,10 +118,10 @@ func (b *backend) periodicFunc(req *logical.Request) error {
 }
 
 const backendHelp = `
-Any registered App can authenticate itself with Vault. The credentials
-depends on the bounds (or constraints) that are set on the App. One
+Any registered Role can authenticate itself with Vault. The credentials
+depends on the bounds (or constraints) that are set on the Role. One
 common required credential is the 'selector_id' which is a unique
-identifier of the App. It can be retrieved from the 'app/<appname>/selector-id'
+identifier of the Role. It can be retrieved from the 'role/<appname>/selector-id'
 endpoint.
 
 The default bound configuration is 'bound_secret_id', which requires

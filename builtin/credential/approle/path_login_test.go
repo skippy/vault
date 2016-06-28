@@ -6,29 +6,29 @@ import (
 	"github.com/hashicorp/vault/logical"
 )
 
-func TestBackend_app_login(t *testing.T) {
+func TestBackend_role_login(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	createApp(t, b, storage, "app1", "a,b,c")
-	appSelectorIDReq := &logical.Request{
+	createRole(t, b, storage, "role1", "a,b,c")
+	roleSelectorIDReq := &logical.Request{
 		Operation: logical.ReadOperation,
-		Path:      "app/app1/selector-id",
+		Path:      "role/role1/selector-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(appSelectorIDReq)
+	resp, err = b.HandleRequest(roleSelectorIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 	selectorID := resp.Data["selector_id"]
 
-	appSecretIDReq := &logical.Request{
+	roleSecretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(appSecretIDReq)
+	resp, err = b.HandleRequest(roleSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}

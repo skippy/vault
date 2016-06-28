@@ -40,17 +40,17 @@ func (b *backend) tidySecretID(s logical.Storage) error {
 
 	var result error
 	for _, saltedSelector := range saltedSelectors {
-		// saltedSelector will already have a '/' suffix. Don't append another one.
+		// saltedSelector will already have a '/' suffix. Don't roleend another one.
 		secretIDHMACs, err := s.List(fmt.Sprintf("secret_id/%s", saltedSelector))
 		if err != nil {
 			return err
 		}
 		for _, secretIDHMAC := range secretIDHMACs {
-			// In order to avoid lock swapping in case there is need to delete,
+			// In order to avoid lock swroleing in case there is need to delete,
 			// grab the write lock.
 			lock := b.secretIDLock(secretIDHMAC)
 			lock.Lock()
-			// saltedSelector will already have a '/' suffix. Don't append another one.
+			// saltedSelector will already have a '/' suffix. Don't roleend another one.
 			entryIndex := fmt.Sprintf("secret_id/%s%s", saltedSelector, secretIDHMAC)
 			secretIDEntry, err := s.Get(entryIndex)
 			if err != nil {
@@ -96,5 +96,5 @@ func (b *backend) pathTidySecretIDUpdate(
 
 const pathTidySecretIDSyn = "Trigger the clean-up of expired SecretID entries."
 const pathTidySecretIDDesc = `SecretIDs will have expiratin time attached to them. The periodic function
-of the backend will look for expired entries and delete them. This happens once in a minute. Invoking
+of the backend will look for expired entries and delete them. This hroleens once in a minute. Invoking
 this endpoint will trigger the clean-up action, without waiting for the backend's periodic function.`

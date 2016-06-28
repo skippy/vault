@@ -10,18 +10,18 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func TestBackend_app_delete_secret_id(t *testing.T) {
+func TestBackend_role_delete_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	createApp(t, b, storage, "app1", "a,b")
+	createRole(t, b, storage, "role1", "a,b")
 	secretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 	}
-	// Create 3 secrets on the app
+	// Create 3 secrets on the role
 	resp, err = b.HandleRequest(secretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
@@ -38,7 +38,7 @@ func TestBackend_app_delete_secret_id(t *testing.T) {
 	listReq := &logical.Request{
 		Operation: logical.ListOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 	}
 	resp, err = b.HandleRequest(listReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -49,12 +49,12 @@ func TestBackend_app_delete_secret_id(t *testing.T) {
 		t.Fatalf("bad: len of secretIDAccessors: expected:3 actual:%d", len(secretIDAccessors))
 	}
 
-	appReq := &logical.Request{
+	roleReq := &logical.Request{
 		Operation: logical.DeleteOperation,
 		Storage:   storage,
-		Path:      "app/app1",
+		Path:      "role/role1",
 	}
-	resp, err = b.HandleRequest(appReq)
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -64,16 +64,16 @@ func TestBackend_app_delete_secret_id(t *testing.T) {
 	}
 }
 
-func TestBackend_app_secret_id_read_delete(t *testing.T) {
+func TestBackend_role_secret_id_read_delete(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	createApp(t, b, storage, "app1", "a,b")
+	createRole(t, b, storage, "role1", "a,b")
 	secretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 	}
 	resp, err = b.HandleRequest(secretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -83,7 +83,7 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	listReq := &logical.Request{
 		Operation: logical.ListOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 	}
 	resp, err = b.HandleRequest(listReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -94,7 +94,7 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	hmacReq := &logical.Request{
 		Operation: logical.ReadOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id/" + hmacSecretID,
+		Path:      "role/role1/secret-id/" + hmacSecretID,
 	}
 	resp, err = b.HandleRequest(hmacReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -121,17 +121,17 @@ func TestBackend_app_secret_id_read_delete(t *testing.T) {
 	}
 }
 
-func TestBackend_app_list_secret_id(t *testing.T) {
+func TestBackend_role_list_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	createApp(t, b, storage, "app1", "a,b")
+	createRole(t, b, storage, "role1", "a,b")
 
 	secretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 	}
 	// Create 5 'secret_id's
 	resp, err = b.HandleRequest(secretIDReq)
@@ -158,7 +158,7 @@ func TestBackend_app_list_secret_id(t *testing.T) {
 	listReq := &logical.Request{
 		Operation: logical.ListOperation,
 		Storage:   storage,
-		Path:      "app/app1/secret-id/",
+		Path:      "role/role1/secret-id/",
 	}
 	resp, err = b.HandleRequest(listReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -170,20 +170,20 @@ func TestBackend_app_list_secret_id(t *testing.T) {
 	}
 }
 
-func TestBackend_app_list(t *testing.T) {
+func TestBackend_role_list(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	createApp(t, b, storage, "app1", "a,b")
-	createApp(t, b, storage, "app2", "c,d")
-	createApp(t, b, storage, "app3", "e,f")
-	createApp(t, b, storage, "app4", "g,h")
-	createApp(t, b, storage, "app5", "i,j")
+	createRole(t, b, storage, "role1", "a,b")
+	createRole(t, b, storage, "role2", "c,d")
+	createRole(t, b, storage, "role3", "e,f")
+	createRole(t, b, storage, "role4", "g,h")
+	createRole(t, b, storage, "role5", "i,j")
 
 	listReq := &logical.Request{
 		Operation: logical.ListOperation,
-		Path:      "app",
+		Path:      "role",
 		Storage:   storage,
 	}
 	resp, err = b.HandleRequest(listReq)
@@ -192,42 +192,42 @@ func TestBackend_app_list(t *testing.T) {
 	}
 
 	actual := resp.Data["keys"].([]string)
-	expected := []string{"app1", "app2", "app3", "app4", "app5"}
+	expected := []string{"role1", "role2", "role3", "role4", "role5"}
 	if !policyutil.EquivalentPolicies(actual, expected) {
-		t.Fatalf("bad: listed apps: expected:%s\nactual:%s", expected, actual)
+		t.Fatalf("bad: listed roles: expected:%s\nactual:%s", expected, actual)
 	}
 }
 
-func TestBackend_app_secret_id(t *testing.T) {
+func TestBackend_role_secret_id(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	appData := map[string]interface{}{
+	roleData := map[string]interface{}{
 		"policies":           "p,q,r,s",
 		"secret_id_num_uses": 10,
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
 	}
-	appReq := &logical.Request{
+	roleReq := &logical.Request{
 		Operation: logical.CreateOperation,
-		Path:      "app/app1",
+		Path:      "role/role1",
 		Storage:   storage,
-		Data:      appData,
+		Data:      roleData,
 	}
 
-	resp, err = b.HandleRequest(appReq)
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appSecretIDReq := &logical.Request{
+	roleSecretIDReq := &logical.Request{
 		Operation: logical.UpdateOperation,
-		Path:      "app/app1/secret-id",
+		Path:      "role/role1/secret-id",
 		Storage:   storage,
 	}
-	resp, err = b.HandleRequest(appSecretIDReq)
+	resp, err = b.HandleRequest(roleSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -236,28 +236,28 @@ func TestBackend_app_secret_id(t *testing.T) {
 		t.Fatalf("failed to generate secret_id")
 	}
 
-	appSecretIDReq.Path = "app/app1/custom-secret-id"
-	appCustomSecretIDData := map[string]interface{}{
+	roleSecretIDReq.Path = "role/role1/custom-secret-id"
+	roleCustomSecretIDData := map[string]interface{}{
 		"secret_id": "abcd123",
 	}
-	appSecretIDReq.Data = appCustomSecretIDData
-	appSecretIDReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appSecretIDReq)
+	roleSecretIDReq.Data = roleCustomSecretIDData
+	roleSecretIDReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleSecretIDReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
 	if resp.Data["secret_id"] != "abcd123" {
-		t.Fatalf("failed to set specific secret_id to app")
+		t.Fatalf("failed to set specific secret_id to role")
 	}
 }
 
-func TestBackend_app_CRUD(t *testing.T) {
+func TestBackend_role_CRUD(t *testing.T) {
 	var resp *logical.Response
 	var err error
 	b, storage := createBackendWithStorage(t)
 
-	appData := map[string]interface{}{
+	roleData := map[string]interface{}{
 		"policies":           "p,q,r,s",
 		"secret_id_num_uses": 10,
 		"secret_id_ttl":      300,
@@ -265,20 +265,20 @@ func TestBackend_app_CRUD(t *testing.T) {
 		"token_max_ttl":      500,
 		"bound_cidr_list":    "127.0.0.1/32,127.0.0.1/16",
 	}
-	appReq := &logical.Request{
+	roleReq := &logical.Request{
 		Operation: logical.CreateOperation,
-		Path:      "app/app1",
+		Path:      "role/role1",
 		Storage:   storage,
-		Data:      appData,
+		Data:      roleData,
 	}
 
-	resp, err = b.HandleRequest(appReq)
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -292,13 +292,13 @@ func TestBackend_app_CRUD(t *testing.T) {
 		"token_max_ttl":      500,
 		"bound_cidr_list":    "127.0.0.1/32,127.0.0.1/16",
 	}
-	var expectedStruct appStorageEntry
+	var expectedStruct roleStorageEntry
 	err = mapstructure.Decode(expected, &expectedStruct)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var actualStruct appStorageEntry
+	var actualStruct roleStorageEntry
 	err = mapstructure.Decode(resp.Data, &actualStruct)
 	if err != nil {
 		t.Fatal(err)
@@ -308,23 +308,23 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
-	appData = map[string]interface{}{
+	roleData = map[string]interface{}{
 		"policies":           "a,b,c,d",
 		"secret_id_num_uses": 100,
 		"secret_id_ttl":      3000,
 		"token_ttl":          4000,
 		"token_max_ttl":      5000,
 	}
-	appReq.Data = appData
-	appReq.Operation = logical.UpdateOperation
+	roleReq.Data = roleData
+	roleReq.Operation = logical.UpdateOperation
 
-	resp, err = b.HandleRequest(appReq)
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -351,22 +351,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for bound_secret_id field
-	appReq.Path = "app/app1/bound-secret-id"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/bound-secret-id"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"bound_secret_id": false}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"bound_secret_id": false}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -374,14 +374,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["bound_secret_id"].(bool) {
 		t.Fatalf("bad: bound_secret_id: expected:false actual:%t\n", resp.Data["bound_secret_id"].(bool))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -391,22 +391,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for policiess field
-	appReq.Path = "app/app1/policies"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/policies"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"policies": "a1,b1,c1,d1"}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"policies": "a1,b1,c1,d1"}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -414,14 +414,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if !reflect.DeepEqual(resp.Data["policies"].([]string), []string{"a1", "b1", "c1", "d1", "default"}) {
 		t.Fatalf("bad: policies: actual:%s\n", resp.Data["policies"].([]string))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -433,22 +433,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for num-uses field
-	appReq.Path = "app/app1/num-uses"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/num-uses"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"secret_id_num_uses": 200}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"secret_id_num_uses": 200}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -456,14 +456,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["secret_id_num_uses"].(int) != 200 {
 		t.Fatalf("bad: secret_id_num_uses: expected:200 actual:%d\n", resp.Data["secret_id_num_uses"].(int))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -473,22 +473,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for secret_id_ttl field
-	appReq.Path = "app/app1/secret-id-ttl"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/secret-id-ttl"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"secret_id_ttl": 3001}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"secret_id_ttl": 3001}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -496,14 +496,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["secret_id_ttl"].(time.Duration) != 3001 {
 		t.Fatalf("bad: secret_id_ttl: expected:3001 actual:%d\n", resp.Data["secret_id_ttl"].(time.Duration))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -513,22 +513,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for 'period' field
-	appReq.Path = "app/app1/period"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/period"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"period": 9001}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"period": 9001}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -536,14 +536,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["period"].(time.Duration) != 9001 {
 		t.Fatalf("bad: period: expected:9001 actual:%d\n", resp.Data["9001"].(time.Duration))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -553,22 +553,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for token_ttl field
-	appReq.Path = "app/app1/token-ttl"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/token-ttl"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"token_ttl": 4001}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"token_ttl": 4001}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -576,14 +576,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["token_ttl"].(time.Duration) != 4001 {
 		t.Fatalf("bad: token_ttl: expected:4001 actual:%d\n", resp.Data["token_ttl"].(time.Duration))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -593,22 +593,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	// RUD for token_max_ttl field
-	appReq.Path = "app/app1/token-max-ttl"
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Path = "role/role1/token-max-ttl"
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"token_max_ttl": 5001}
-	appReq.Operation = logical.UpdateOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Data = map[string]interface{}{"token_max_ttl": 5001}
+	roleReq.Operation = logical.UpdateOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -616,14 +616,14 @@ func TestBackend_app_CRUD(t *testing.T) {
 	if resp.Data["token_max_ttl"].(time.Duration) != 5001 {
 		t.Fatalf("bad: token_max_ttl: expected:5001 actual:%d\n", resp.Data["token_max_ttl"].(time.Duration))
 	}
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -632,16 +632,16 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("expected value to be reset")
 	}
 
-	// Delete test for app
-	appReq.Path = "app/app1"
-	appReq.Operation = logical.DeleteOperation
-	resp, err = b.HandleRequest(appReq)
+	// Delete test for role
+	roleReq.Path = "role/role1"
+	roleReq.Operation = logical.DeleteOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Operation = logical.ReadOperation
-	resp, err = b.HandleRequest(appReq)
+	roleReq.Operation = logical.ReadOperation
+	resp, err = b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
@@ -651,22 +651,22 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 }
 
-func createApp(t *testing.T, b *backend, s logical.Storage, appName, policies string) {
-	appData := map[string]interface{}{
+func createRole(t *testing.T, b *backend, s logical.Storage, roleName, policies string) {
+	roleData := map[string]interface{}{
 		"policies":           policies,
 		"secret_id_num_uses": 10,
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
 	}
-	appReq := &logical.Request{
+	roleReq := &logical.Request{
 		Operation: logical.CreateOperation,
-		Path:      "app/" + appName,
+		Path:      "role/" + roleName,
 		Storage:   s,
-		Data:      appData,
+		Data:      roleData,
 	}
 
-	resp, err := b.HandleRequest(appReq)
+	resp, err := b.HandleRequest(roleReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
