@@ -263,7 +263,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
-		"bind_cidr_list":     "127.0.0.1/32,127.0.0.1/16",
+		"bound_cidr_list":    "127.0.0.1/32,127.0.0.1/16",
 	}
 	appReq := &logical.Request{
 		Operation: logical.CreateOperation,
@@ -284,13 +284,13 @@ func TestBackend_app_CRUD(t *testing.T) {
 	}
 
 	expected := map[string]interface{}{
-		"bind_secret_id":     true,
+		"bound_secret_id":    true,
 		"policies":           []string{"default", "p", "q", "r", "s"},
 		"secret_id_num_uses": 10,
 		"secret_id_ttl":      300,
 		"token_ttl":          400,
 		"token_max_ttl":      500,
-		"bind_cidr_list":     "127.0.0.1/32,127.0.0.1/16",
+		"bound_cidr_list":    "127.0.0.1/32,127.0.0.1/16",
 	}
 	var expectedStruct appStorageEntry
 	err = mapstructure.Decode(expected, &expectedStruct)
@@ -350,15 +350,15 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("bad:\nexpected:%#v\nactual:%#v\n", expectedStruct, actualStruct)
 	}
 
-	// RUD for bind_secret_id field
-	appReq.Path = "app/app1/bind-secret-id"
+	// RUD for bound_secret_id field
+	appReq.Path = "app/app1/bound-secret-id"
 	appReq.Operation = logical.ReadOperation
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	appReq.Data = map[string]interface{}{"bind_secret_id": false}
+	appReq.Data = map[string]interface{}{"bound_secret_id": false}
 	appReq.Operation = logical.UpdateOperation
 	resp, err = b.HandleRequest(appReq)
 	if err != nil || (resp != nil && resp.IsError()) {
@@ -371,8 +371,8 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if resp.Data["bind_secret_id"].(bool) {
-		t.Fatalf("bad: bind_secret_id: expected:false actual:%t\n", resp.Data["bind_secret_id"].(bool))
+	if resp.Data["bound_secret_id"].(bool) {
+		t.Fatalf("bad: bound_secret_id: expected:false actual:%t\n", resp.Data["bound_secret_id"].(bool))
 	}
 	appReq.Operation = logical.DeleteOperation
 	resp, err = b.HandleRequest(appReq)
@@ -386,7 +386,7 @@ func TestBackend_app_CRUD(t *testing.T) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
 
-	if !resp.Data["bind_secret_id"].(bool) {
+	if !resp.Data["bound_secret_id"].(bool) {
 		t.Fatalf("expected the default value of 'true' to be set")
 	}
 

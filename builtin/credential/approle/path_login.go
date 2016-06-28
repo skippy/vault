@@ -14,7 +14,7 @@ func pathLogin(b *backend) *framework.Path {
 		Fields: map[string]*framework.FieldSchema{
 			"selector_id": &framework.FieldSchema{
 				Type:        framework.TypeString,
-				Description: "Unique identifier of the App. Required to be supplied when the bind type is 'bind_secret_id'",
+				Description: "Unique identifier of the App. Required to be supplied when the bound type is 'bound_secret_id'",
 			},
 			"secret_id": &framework.FieldSchema{
 				Type:        framework.TypeString,

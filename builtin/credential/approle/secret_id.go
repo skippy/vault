@@ -168,13 +168,13 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 		return nil, err
 	}
 
-	// Take actions based on the set bind options
+	// Take actions based on the set bound options
 
-	// If 'bind_cidr_list' was set, verify the CIDR restrictions
-	// Keep the optional binding parameters outside of the switch
+	// If 'bound_cidr_list' was set, verify the CIDR restrictions
+	// Keep the optional bounding parameters outside of the switch
 	// block below.
-	if app.BindCIDRList != "" {
-		cidrBlocks := strings.Split(app.BindCIDRList, ",")
+	if app.BoundCIDRList != "" {
+		cidrBlocks := strings.Split(app.BoundCIDRList, ",")
 		for _, block := range cidrBlocks {
 			_, cidr, err := net.ParseCIDR(block)
 			if err != nil {
@@ -192,9 +192,9 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 	}
 
 	switch {
-	// If 'bind_secret_id' was set on app, look for the field 'secret_id'
+	// If 'bound_secret_id' was set on app, look for the field 'secret_id'
 	// to be specified and validate it.
-	case app.BindSecretID:
+	case app.BoundSecretID:
 		secretID := strings.TrimSpace(data.Get("secret_id").(string))
 		if secretID == "" {
 			return nil, fmt.Errorf("missing secret_id")
@@ -202,7 +202,7 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 
 		// Check if the SecretID supplied is valid. If use limit was specified
 		// on the SecretID, it will be decremented in this call.
-		valid, err := b.validateBindSecretID(req.Storage, selectorID, secretID, app.HMACKey)
+		valid, err := b.validateBoundSecretID(req.Storage, selectorID, secretID, app.HMACKey)
 		if err != nil {
 			return nil, err
 		}
@@ -210,17 +210,17 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 			return nil, fmt.Errorf("invalid secret_id: %s\n", secretID)
 		}
 	default:
-		// Ensure at least one bind criterion is set.
-		return nil, fmt.Errorf("failed to find the binding creteria; there should be at least one required bind parameter set")
+		// Ensure at least one bound criterion is set.
+		return nil, fmt.Errorf("failed to find the bounding creteria; there should be at least one required bound parameter set")
 	}
 
-	// As and when more binds are supported, add additional verification process
+	// As and when more bounds are supported, add additional verification process
 
 	return app, nil
 }
 
-// validateBindSecretID is used to determine if the given SecretID is a valid one.
-func (b *backend) validateBindSecretID(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
+// validateBoundSecretID is used to determine if the given SecretID is a valid one.
+func (b *backend) validateBoundSecretID(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
 	hashedSecretID, err := createHMAC(hmacKey, secretID)
 	if err != nil {
 		return false, fmt.Errorf("failed to create HMAC of secret_id: %s", err)

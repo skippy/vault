@@ -1,19 +1,20 @@
 ---
 layout: "docs"
-page_title: "Auth Backend: AppGroup"
-sidebar_current: "docs-auth-appgroup"
+page_title: "Auth Backend: AppRole"
+sidebar_current: "docs-auth-approle"
 description: |-
-  The AppGroup backend allows any App(s), or Group(s) of Apps to authenticate with Vault.
+  The AppRole backend allows machines and services to authenticate with Vault.
 ---
 
-# Auth Backend: AppGroup
+# Auth Backend: AppRole
 
-Any registered App(s) or Group(s) of Apps can authenticate themselves
-with Vault using SecretIDs that are specifically generated to serve that
+The AppRole backend allows machines and services (referred to as Apps)
+to authenticate with Vault. Apps can be created
+Registered Apps can authenticate themselves with Vault using SecretIDs that are specifically generated to serve that
 purpose. The SecretIDs have nice properties like usage-limit and expiration,
 that can address numerous use-cases. An App can represent a service, or
 a machine or anything that can be IDed. Since an App can be a machine in
-itself, the AppGroup backend is a potential successor for the App-ID backend.
+itself, the AppRole backend is a potential successor for the App-ID backend.
 
 ### What Does An App Mean?
 An App represents a set of Vault policies, under a name. In essense,
@@ -114,7 +115,7 @@ a set of policies, nothing more.
 
 ## API
 ## API
-### auth/appgroup/app
+### auth/approle/app
 #### LIST
 <dl class="api">
   <dt>Description</dt>
@@ -126,7 +127,7 @@ a set of policies, nothing more.
   <dd>LIST/GET</dd>
 
   <dt>URL</dt>
-  <dd>`auth/appgroup/app` (LIST) or `auth/appgroup/app?list=true`</dd>
+  <dd>`auth/approle/app` (LIST) or `auth/approle/app?list=true`</dd>
 
   <dt>Parameters</dt>
     None.
@@ -138,7 +139,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/app/<app_name>
+### auth/approle/app/<app_name>
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -224,12 +225,12 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/app/<app_name>/policies
-### auth/appgroup/app/<app_name>/secret-id-num-uses
-### auth/appgroup/app/<app_name>/secret-id-ttl
-### auth/appgroup/app/<app_name>/token-ttl
-### auth/appgroup/app/<app_name>/token-max-ttl
-### auth/appgroup/app/<app_name>/bind-secret-id
+### auth/approle/app/<app_name>/policies
+### auth/approle/app/<app_name>/secret-id-num-uses
+### auth/approle/app/<app_name>/secret-id-ttl
+### auth/approle/app/<app_name>/token-ttl
+### auth/approle/app/<app_name>/token-max-ttl
+### auth/approle/app/<app_name>/bind-secret-id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -315,7 +316,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/app/<app_name>/selector-id
+### auth/approle/app/<app_name>/selector-id
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -345,7 +346,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/app/<app_name>/secret-id
+### auth/approle/app/<app_name>/secret-id
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -376,7 +377,7 @@ a set of policies, nothing more.
 
 #### LIST
 
-### auth/appgroup/app/<app_name>/secret-id/<secret_id_hmac>
+### auth/approle/app/<app_name>/secret-id/<secret_id_hmac>
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -434,7 +435,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/app/<app_name>/custom-secret-id
+### auth/approle/app/<app_name>/custom-secret-id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -464,7 +465,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/
+### auth/approle/group/
 #### LIST
 <dl class="api">
   <dt>Description</dt>
@@ -493,7 +494,7 @@ a set of policies, nothing more.
   </dd>
 </dl>
 
-### auth/appgroup/group/<group_name>
+### auth/approle/group/<group_name>
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -579,12 +580,12 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/<group_name>/apps
-### auth/appgroup/group/<group_name>/additional-policies
-### auth/appgroup/group/<group_name>/secret-id-num-uses
-### auth/appgroup/group/<group_name>/token-ttl
-### auth/appgroup/group/<group_name>/token-max-ttl
-### auth/appgroup/group/<group_name>/bind-secret-id
+### auth/approle/group/<group_name>/apps
+### auth/approle/group/<group_name>/additional-policies
+### auth/approle/group/<group_name>/secret-id-num-uses
+### auth/approle/group/<group_name>/token-ttl
+### auth/approle/group/<group_name>/token-max-ttl
+### auth/approle/group/<group_name>/bind-secret-id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -670,7 +671,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/<group_name>/selector-id
+### auth/approle/group/<group_name>/selector-id
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -700,7 +701,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/<group_name>/secret-id
+### auth/approle/group/<group_name>/secret-id
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -758,7 +759,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/<group_name>/secret-id/<secret_id_hmac>
+### auth/approle/group/<group_name>/secret-id/<secret_id_hmac>
 #### GET
 <dl class="api">
   <dt>Description</dt>
@@ -816,7 +817,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/group/<group_name>/custom-secret-id: Params: secret_id
+### auth/approle/group/<group_name>/custom-secret-id: Params: secret_id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -846,7 +847,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/supergroup/secret-id
+### auth/approle/supergroup/secret-id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -876,7 +877,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/supergroup/custom-secret-id
+### auth/approle/supergroup/custom-secret-id
 #### POST
 <dl class="api">
   <dt>Description</dt>
@@ -906,7 +907,7 @@ a set of policies, nothing more.
 </dl>
 
 
-### auth/appgroup/login selector_id="xxx-xxx-xxx" secret_id="yyy-yyy-yyy"
+### auth/approle/login selector_id="xxx-xxx-xxx" secret_id="yyy-yyy-yyy"
 #### POST
 <dl class="api">
   <dt>Description</dt>

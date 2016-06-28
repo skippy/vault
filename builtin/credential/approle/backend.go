@@ -119,12 +119,12 @@ func (b *backend) periodicFunc(req *logical.Request) error {
 
 const backendHelp = `
 Any registered App can authenticate itself with Vault. The credentials
-depends on the binds (or constraints) that are set on the App. One
+depends on the bounds (or constraints) that are set on the App. One
 common required credential is the 'selector_id' which is a unique
 identifier of the App. It can be retrieved from the 'app/<appname>/selector-id'
 endpoint.
 
-The default bind configuration is 'bind_secret_id', which requires
+The default bound configuration is 'bound_secret_id', which requires
 the credential 'secret_id' to be presented during login. Refer to
-the documentation for other types of binds. Bind constraints may
+the documentation for other types of bounds. Bound constraints may
 or may not mandate specific credentials during login.`
