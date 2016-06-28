@@ -51,12 +51,12 @@ type secretIDStorageEntry struct {
 
 // Represents the payload of the storage entry of the accessor that maps to a unique
 // SecretID. Note that SecretIDs should never be stored in plaintext anywhere in the
-// backend. HashedSecretID will be used as an index to fetch the properties of the
+// backend. SecretIDHMAC will be used as an index to fetch the properties of the
 // SecretID and to delete the SecretID.
 type secretIDAccessorStorageEntry struct {
 	// Hash of the SecretID which can be used to find the storage index at which
 	// properties of SecretID is stored.
-	HashedSecretID string `json:"hashed_secret_id" structs:"hashed_secret_id" mapstructure:"hashed_secret_id"`
+	SecretIDHMAC string `json:"secret_id_hmac" structs:"secret_id_hmac" mapstructure:"secret_id_hmac"`
 }
 
 // selectorStorageEntry represents the reverse mapping from SelectorID to App
@@ -221,16 +221,16 @@ func (b *backend) validateCredentials(req *logical.Request, data *framework.Fiel
 
 // validateBoundSecretID is used to determine if the given SecretID is a valid one.
 func (b *backend) validateBoundSecretID(s logical.Storage, selectorID, secretID, hmacKey string) (bool, error) {
-	hashedSecretID, err := createHMAC(hmacKey, secretID)
+	secretIDHMAC, err := createHMAC(hmacKey, secretID)
 	if err != nil {
 		return false, fmt.Errorf("failed to create HMAC of secret_id: %s", err)
 	}
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), secretIDHMAC)
 
-	// SecretID locks are always index based on hashedSecretIDs. This helps
+	// SecretID locks are always index based on secretIDHMACs. This helps
 	// acquiring the locks when the SecretIDs are listed. This allows grabbing
 	// the correct locks even if the SecretIDs are not known in plaintext.
-	lock := b.secretIDLock(hashedSecretID)
+	lock := b.secretIDLock(secretIDHMAC)
 	lock.RLock()
 
 	result := secretIDStorageEntry{}
@@ -315,13 +315,13 @@ func (b *backend) selectorIDLock(selectorID string) *sync.RWMutex {
 
 // secretIDLock is used to get a lock from the pre-initialized map
 // of locks. Map is indexed based on the first 2 characters of the
-// hashed secretID. If the input is not hex encoded or if empty, a
+// secretIDHMAC. If the input is not hex encoded or if empty, a
 // "custom" lock will be returned.
-func (b *backend) secretIDLock(hashedSecretID string) *sync.RWMutex {
+func (b *backend) secretIDLock(secretIDHMAC string) *sync.RWMutex {
 	var lock *sync.RWMutex
 	var ok bool
-	if len(hashedSecretID) >= 2 {
-		lock, ok = b.secretIDLocksMap[hashedSecretID[0:2]]
+	if len(secretIDHMAC) >= 2 {
+		lock, ok = b.secretIDLocksMap[secretIDHMAC[0:2]]
 	}
 	if !ok || lock == nil {
 		// Fall back for custom SecretIDs
@@ -343,13 +343,13 @@ func createHMAC(key, value string) (string, error) {
 
 // registerSecretIDEntry creates a new storage entry for the given SecretID.
 func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID, hmacKey string, secretEntry *secretIDStorageEntry) (*secretIDStorageEntry, error) {
-	hashedSecretID, err := createHMAC(hmacKey, secretID)
+	secretIDHMAC, err := createHMAC(hmacKey, secretID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HMAC of secret_id: %s", err)
 	}
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), secretIDHMAC)
 
-	lock := b.secretIDLock(hashedSecretID)
+	lock := b.secretIDLock(secretIDHMAC)
 	lock.RLock()
 
 	entry, err := s.Get(entryIndex)
@@ -396,7 +396,7 @@ func (b *backend) registerSecretIDEntry(s logical.Storage, selectorID, secretID,
 	}
 
 	// Before storing the SecretID, store its accessor.
-	if err := b.createAccessor(s, secretEntry, hashedSecretID); err != nil {
+	if err := b.createAccessor(s, secretEntry, secretIDHMAC); err != nil {
 		return nil, err
 	}
 
@@ -436,7 +436,7 @@ func (b *backend) secretIDAccessorEntry(s logical.Storage, secretIDAccessor stri
 // createAccessor creates an identifier for the SecretID. A storage index,
 // mapping the accessor to the SecretID is also created. This method should
 // be called when the lock for the corresponding SecretID is held.
-func (b *backend) createAccessor(s logical.Storage, entry *secretIDStorageEntry, hashedSecretID string) error {
+func (b *backend) createAccessor(s logical.Storage, entry *secretIDStorageEntry, secretIDHMAC string) error {
 	// Create a random accessor
 	accessorUUID, err := uuid.GenerateUUID()
 	if err != nil {
@@ -447,7 +447,7 @@ func (b *backend) createAccessor(s logical.Storage, entry *secretIDStorageEntry,
 	// Create index entry, mapping the accessor to the token ID
 	entryIndex := "accessor/" + b.salt.SaltID(entry.SecretIDAccessor)
 	if entry, err := logical.StorageEntryJSON(entryIndex, &secretIDAccessorStorageEntry{
-		HashedSecretID: hashedSecretID,
+		SecretIDHMAC: secretIDHMAC,
 	}); err != nil {
 		return err
 	} else if err = s.Put(entry); err != nil {
@@ -484,18 +484,18 @@ func (b *backend) flushSelectorSecrets(s logical.Storage, selectorID string) err
 	customLock := b.secretIDLock("")
 	customLock.RLock()
 	defer customLock.RUnlock()
-	hashedSecretIDs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
+	secretIDHMACs, err := s.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(selectorID)))
 	if err != nil {
 		return err
 	}
-	for _, hashedSecretID := range hashedSecretIDs {
+	for _, secretIDHMAC := range secretIDHMACs {
 		// Acquire the lock belonging to the SecretID
-		lock := b.secretIDLock(hashedSecretID)
+		lock := b.secretIDLock(secretIDHMAC)
 		lock.Lock()
-		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), hashedSecretID)
+		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(selectorID), secretIDHMAC)
 		if err := s.Delete(entryIndex); err != nil {
 			lock.Unlock()
-			return fmt.Errorf("error deleting SecretID %s from storage: %s", hashedSecretID, err)
+			return fmt.Errorf("error deleting SecretID %s from storage: %s", secretIDHMAC, err)
 		}
 		lock.Unlock()
 	}

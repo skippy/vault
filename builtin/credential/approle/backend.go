@@ -31,7 +31,7 @@ type backend struct {
 
 	// Map of locks to make changes to the storage entries of SecretIDs
 	// generated. This will be initiated to a predefined number of locks
-	// when the backend is created, and will be indexed based on the hashed
+	// when the backend is created, and will be indexed based on the HMAC-ed
 	// SecretIDs.
 	secretIDLocksMap map[string]*sync.RWMutex
 }

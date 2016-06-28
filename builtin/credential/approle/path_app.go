@@ -435,23 +435,23 @@ func (b *backend) pathAppSecretIDList(req *logical.Request, data *framework.Fiel
 
 	// Listing works one level at a time. Get the first level of data
 	// which could then be used to get the actual SecretID storage entries.
-	hashedSecretIDs, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
+	secretIDHMACs, err := req.Storage.List(fmt.Sprintf("secret_id/%s/", b.salt.SaltID(app.SelectorID)))
 	if err != nil {
 		return nil, err
 	}
 
 	var listItems []string
-	for _, hashedSecretID := range hashedSecretIDs {
+	for _, secretIDHMAC := range secretIDHMACs {
 		// Prepare the full index of the SecretIDs.
-		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), hashedSecretID)
+		entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), secretIDHMAC)
 
 		// SecretID locks are not indexed by SecretIDs itself.
 		// This is because SecretIDs are not stored in plaintext
 		// form anywhere in the backend, and hence accessing its
 		// corresponding lock many times using SecretIDs is not
-		// possible. Also, indexing it everywhere using hashedSecretIDs
+		// possible. Also, indexing it everywhere using secretIDHMACs
 		// makes listing operation easier.
-		lock := b.secretIDLock(hashedSecretID)
+		lock := b.secretIDLock(secretIDHMAC)
 		lock.RLock()
 
 		result := secretIDStorageEntry{}
@@ -722,9 +722,9 @@ func (b *backend) pathAppSecretIDAccessorRead(req *logical.Request, data *framew
 		return nil, fmt.Errorf("failed to find accessor entry for secret_id_accessor:%s\n", secretIDAccessor)
 	}
 
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.HashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.SecretIDHMAC)
 
-	lock := b.secretIDLock(accessorEntry.HashedSecretID)
+	lock := b.secretIDLock(accessorEntry.SecretIDHMAC)
 	lock.RLock()
 	defer lock.RUnlock()
 
@@ -773,10 +773,10 @@ func (b *backend) pathAppSecretIDAccessorDelete(req *logical.Request, data *fram
 		return nil, fmt.Errorf("failed to find accessor entry for secret_id_accessor:%s\n", secretIDAccessor)
 	}
 
-	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.HashedSecretID)
+	entryIndex := fmt.Sprintf("secret_id/%s/%s", b.salt.SaltID(app.SelectorID), accessorEntry.SecretIDHMAC)
 	accessorEntryIndex := "accessor/" + b.salt.SaltID(secretIDAccessor)
 
-	lock := b.secretIDLock(accessorEntry.HashedSecretID)
+	lock := b.secretIDLock(accessorEntry.SecretIDHMAC)
 	lock.Lock()
 	defer lock.Unlock()
 

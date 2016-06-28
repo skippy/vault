@@ -44,9 +44,9 @@ func TestBackend_app_delete_secret_id(t *testing.T) {
 	if err != nil || (resp != nil && resp.IsError()) {
 		t.Fatalf("err:%v resp:%#v", err, resp)
 	}
-	hashedSecrets := resp.Data["keys"].([]string)
-	if len(hashedSecrets) != 3 {
-		t.Fatalf("bad: len of hashedSecrets: expected:3 actual:%d", len(hashedSecrets))
+	secretIDAccessors := resp.Data["keys"].([]string)
+	if len(secretIDAccessors) != 3 {
+		t.Fatalf("bad: len of secretIDAccessors: expected:3 actual:%d", len(secretIDAccessors))
 	}
 
 	appReq := &logical.Request{
