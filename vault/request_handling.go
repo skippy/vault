@@ -375,12 +375,14 @@ func (c *Core) wrapInCubbyhole(req *logical.Request, resp *logical.Response) (*l
 	// before auditing so that resp.WrapInfo.Token can contain the HMAC'd
 	// wrapping token ID in the audit logs, so that it can be determined from
 	// the audit logs whether the token was ever actually used.
+	creationTime := time.Now()
 	te := TokenEntry{
-		Path:         req.Path,
-		Policies:     []string{"cubbyhole-response-wrapping"},
-		CreationTime: time.Now().Unix(),
-		TTL:          resp.WrapInfo.TTL,
-		NumUses:      1,
+		Path:           req.Path,
+		Policies:       []string{"response-wrapping"},
+		CreationTime:   creationTime.Unix(),
+		TTL:            resp.WrapInfo.TTL,
+		NumUses:        1,
+		ExplicitMaxTTL: resp.WrapInfo.TTL,
 	}
 
 	if err := c.tokenStore.create(&te); err != nil {
@@ -389,6 +391,13 @@ func (c *Core) wrapInCubbyhole(req *logical.Request, resp *logical.Response) (*l
 	}
 
 	resp.WrapInfo.Token = te.ID
+	resp.WrapInfo.CreationTime = creationTime
+
+	// This will only be non-nil if this response contains a token, so in that
+	// case put the accessor in the wrap info.
+	if resp.Auth != nil {
+		resp.WrapInfo.WrappedAccessor = resp.Auth.Accessor
+	}
 
 	httpResponse := logical.SanitizeResponse(resp)
 
@@ -429,7 +438,7 @@ func (c *Core) wrapInCubbyhole(req *logical.Request, resp *logical.Response) (*l
 
 	auth := &logical.Auth{
 		ClientToken: te.ID,
-		Policies:    []string{"cubbyhole-response-wrapping"},
+		Policies:    []string{"response-wrapping"},
 		LeaseOptions: logical.LeaseOptions{
 			TTL:       te.TTL,
 			Renewable: false,

@@ -29,8 +29,9 @@ import (
 )
 
 var (
-	stepCount       = 0
-	serialUnderTest string
+	stepCount               = 0
+	serialUnderTest         string
+	parsedKeyUsageUnderTest int
 )
 
 // Performs basic tests on CA functionality
@@ -366,7 +367,7 @@ func TestBackend_ECRoles_CSR(t *testing.T) {
 }
 
 // Performs some validity checking on the returned bundles
-func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage certUsage, validity time.Duration, certBundle *certutil.CertBundle) (*certutil.ParsedCertBundle, error) {
+func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration, certBundle *certutil.CertBundle) (*certutil.ParsedCertBundle, error) {
 	parsedCertBundle, err := certBundle.ToParsedCertBundle()
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing cert bundle: %s", err)
@@ -407,27 +408,32 @@ func checkCertsAndPrivateKey(keyType string, key crypto.Signer, usage certUsage,
 	}
 
 	cert := parsedCertBundle.Certificate
-	// There should only be one usage type, because only one is requested
+
+	if usage != cert.KeyUsage {
+		return nil, fmt.Errorf("Expected usage of %#v, got %#v; ext usage is %#v", usage, cert.KeyUsage, cert.ExtKeyUsage)
+	}
+
+	// There should only be one ext usage type, because only one is requested
 	// in the tests
 	if len(cert.ExtKeyUsage) != 1 {
-		return nil, fmt.Errorf("Got wrong size key usage in generated cert; values are %#v", cert.ExtKeyUsage)
+		return nil, fmt.Errorf("Got wrong size key usage in generated cert; expected 1, values are %#v", cert.ExtKeyUsage)
 	}
-	switch usage {
-	case emailProtectionUsage:
+	switch extUsage {
+	case x509.ExtKeyUsageEmailProtection:
 		if cert.ExtKeyUsage[0] != x509.ExtKeyUsageEmailProtection {
-			return nil, fmt.Errorf("Bad key usage")
+			return nil, fmt.Errorf("Bad extended key usage")
 		}
-	case serverUsage:
+	case x509.ExtKeyUsageServerAuth:
 		if cert.ExtKeyUsage[0] != x509.ExtKeyUsageServerAuth {
-			return nil, fmt.Errorf("Bad key usage")
+			return nil, fmt.Errorf("Bad extended key usage")
 		}
-	case clientUsage:
+	case x509.ExtKeyUsageClientAuth:
 		if cert.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth {
-			return nil, fmt.Errorf("Bad key usage")
+			return nil, fmt.Errorf("Bad extended key usage")
 		}
-	case codeSigningUsage:
+	case x509.ExtKeyUsageCodeSigning:
 		if cert.ExtKeyUsage[0] != x509.ExtKeyUsageCodeSigning {
-			return nil, fmt.Errorf("Bad key usage")
+			return nil, fmt.Errorf("Bad extended key usage")
 		}
 	}
 
@@ -1497,14 +1503,14 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 
 	// Returns a TestCheckFunc that performs various validity checks on the
 	// returned certificate information, mostly within checkCertsAndPrivateKey
-	getCnCheck := func(name string, role roleEntry, key crypto.Signer, usage certUsage, validity time.Duration) logicaltest.TestCheckFunc {
+	getCnCheck := func(name string, role roleEntry, key crypto.Signer, usage x509.KeyUsage, extUsage x509.ExtKeyUsage, validity time.Duration) logicaltest.TestCheckFunc {
 		var certBundle certutil.CertBundle
 		return func(resp *logical.Response) error {
 			err := mapstructure.Decode(resp.Data, &certBundle)
 			if err != nil {
 				return err
 			}
-			parsedCertBundle, err := checkCertsAndPrivateKey(role.KeyType, key, usage, validity, &certBundle)
+			parsedCertBundle, err := checkCertsAndPrivateKey(role.KeyType, key, usage, extUsage, validity, &certBundle)
 			if err != nil {
 				return fmt.Errorf("Error checking generated certificate: %s", err)
 			}
@@ -1567,20 +1573,57 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 			roleVals.ClientFlag = false
 			roleVals.CodeSigningFlag = false
 			roleVals.EmailProtectionFlag = false
-			var usage certUsage
-			i := mathRand.Int()
+
+			var usage string
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",DigitalSignature"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",ContentCoMmitment"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",KeyEncipherment"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",DataEncipherment"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",KeyAgreemEnt"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",CertSign"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",CRLSign"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",EncipherOnly"
+			}
+			if mathRand.Int()%2 == 1 {
+				usage = usage + ",DecipherOnly"
+			}
+
+			roleVals.KeyUsage = usage
+			parsedKeyUsage := parseKeyUsages(roleVals.KeyUsage)
+			if parsedKeyUsage == 0 && usage != "" {
+				panic("parsed key usages was zero")
+			}
+			parsedKeyUsageUnderTest = parsedKeyUsage
+
+			var extUsage x509.ExtKeyUsage
+			i := mathRand.Int() % 4
 			switch {
-			case i%5 == 0:
-				usage = emailProtectionUsage
+			case i == 0:
+				extUsage = x509.ExtKeyUsageEmailProtection
 				roleVals.EmailProtectionFlag = true
-			case i%3 == 0:
-				usage = serverUsage
+			case i == 1:
+				extUsage = x509.ExtKeyUsageServerAuth
 				roleVals.ServerFlag = true
-			case i%2 == 0:
-				usage = clientUsage
+			case i == 2:
+				extUsage = x509.ExtKeyUsageClientAuth
 				roleVals.ClientFlag = true
 			default:
-				usage = codeSigningUsage
+				extUsage = x509.ExtKeyUsageCodeSigning
 				roleVals.CodeSigningFlag = true
 			}
 
@@ -1666,9 +1709,9 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 				}
 				issueVals.CSR = strings.TrimSpace(string(pem.EncodeToMemory(&block)))
 
-				addTests(getCnCheck(issueVals.CommonName, roleVals, privKey, usage, validity))
+				addTests(getCnCheck(issueVals.CommonName, roleVals, privKey, x509.KeyUsage(parsedKeyUsage), extUsage, validity))
 			} else {
-				addTests(getCnCheck(issueVals.CommonName, roleVals, nil, usage, validity))
+				addTests(getCnCheck(issueVals.CommonName, roleVals, nil, x509.KeyUsage(parsedKeyUsage), extUsage, validity))
 			}
 		}
 	}
@@ -1782,6 +1825,133 @@ func generateRoleSteps(t *testing.T, useCSRs bool) []logicaltest.TestStep {
 	})
 
 	return ret
+}
+
+func TestBackend_PathFetchCertList(t *testing.T) {
+	// create the backend
+	config := logical.TestBackendConfig()
+	storage := &logical.InmemStorage{}
+	config.StorageView = storage
+
+	b := Backend()
+	_, err := b.Setup(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// generate root
+	rootData := map[string]interface{}{
+		"common_name": "test.com",
+		"ttl":         "6h",
+	}
+
+	resp, err := b.HandleRequest(&logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "root/generate/internal",
+		Storage:   storage,
+		Data:      rootData,
+	})
+	if resp != nil && resp.IsError() {
+		t.Fatalf("failed to generate root, %#v", resp)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// config urls
+	urlsData := map[string]interface{}{
+		"issuing_certificates":    "http://127.0.0.1:8200/v1/pki/ca",
+		"crl_distribution_points": "http://127.0.0.1:8200/v1/pki/crl",
+	}
+
+	resp, err = b.HandleRequest(&logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "config/urls",
+		Storage:   storage,
+		Data:      urlsData,
+	})
+	if resp != nil && resp.IsError() {
+		t.Fatalf("failed to config urls, %#v", resp)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create a role entry
+	roleData := map[string]interface{}{
+		"allowed_domains":  "test.com",
+		"allow_subdomains": "true",
+		"max_ttl":          "4h",
+	}
+
+	resp, err = b.HandleRequest(&logical.Request{
+		Operation: logical.UpdateOperation,
+		Path:      "roles/test-example",
+		Storage:   storage,
+		Data:      roleData,
+	})
+	if resp != nil && resp.IsError() {
+		t.Fatalf("failed to create a role, %#v", resp)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// issue some certs
+	i := 1
+	for i < 10 {
+		certData := map[string]interface{}{
+			"common_name": "example.test.com",
+		}
+		resp, err = b.HandleRequest(&logical.Request{
+			Operation: logical.UpdateOperation,
+			Path:      "issue/test-example",
+			Storage:   storage,
+			Data:      certData,
+		})
+		if resp != nil && resp.IsError() {
+			t.Fatalf("failed to issue a cert, %#v", resp)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		i = i + 1
+	}
+
+	// list certs
+	resp, err = b.HandleRequest(&logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "certs",
+		Storage:   storage,
+	})
+	if resp != nil && resp.IsError() {
+		t.Fatalf("failed to list certs, %#v", resp)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	// check that the root and 9 additional certs are all listed
+	if len(resp.Data["keys"].([]string)) != 10 {
+		t.Fatalf("failed to list all 10 certs")
+	}
+
+	// list certs/
+	resp, err = b.HandleRequest(&logical.Request{
+		Operation: logical.ListOperation,
+		Path:      "certs/",
+		Storage:   storage,
+	})
+	if resp != nil && resp.IsError() {
+		t.Fatalf("failed to list certs, %#v", resp)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	// check that the root and 9 additional certs are all listed
+	if len(resp.Data["keys"].([]string)) != 10 {
+		t.Fatalf("failed to list all 10 certs")
+	}
 }
 
 const (

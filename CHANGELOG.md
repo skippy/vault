@@ -1,4 +1,47 @@
-## 0.6.0 (Unreleased)
+## 0.6.1 (Unreleased)
+
+DEPRECATIONS/BREAKING CHANGES:
+
+ * Issued certificates from the `pki` backend against new roles created after upgrading will contain a set of default key usages. 
+
+FEATURES:
+
+ * **Convergent Encryption in `Transit`**: The `transit` backend now supports a
+   convergent encryption mode where the same plaintext will produce the same
+   ciphertext. Although very useful in some situations, this has security
+   implications, which are mostly mitigated by requiring the use of key
+   derivation when convergent encryption is enabled. See [the `transit`
+   documentation](https://www.vaultproject.io/docs/secrets/transit/index.html)
+   for more details. [GH-1537]
+ * **Key Usage Control in `PKI`**: Issued certificates from roles created or
+   modified after upgrading contain a set of default key usages for increased
+   compatibility with OpenVPN and some other software. This set can be changed
+   when writing a role definition. Existing roles are unaffected. [GH-1552]
+
+IMPROVEMENTS:
+ * cli: Output formatting in the presence of warnings in the response object
+   [GH-1533]
+ * cli: `vault auth` command supports a `-path` option to take in the path at
+   which the auth backend is enabled, thereby allowing authenticating against
+   different paths using the command options [GH-1532]
+ * cli: `vault auth -methods` will now display the config settings of the mount
+   [GH-1531]
+ * credential/aws-ec2: Added a new constraint, 'bound_account_id' to the role
+   [GH-1523]
+ * secret/aws: Listing of roles is supported now  [GH-1546]
+ * secret/mssql,mysql,postgresql: Reading of connection settings is supported
+   in all the sql backends [GH-1515]
+
+BUG FIXES:
+
+ * credential/aws-ec2: Added a nil check for stored whitelist identity object
+   during renewal [GH-1542]
+ * core: Fix regression causing status codes to be `400` in most non-5xx error
+   cases [GH-1553]
+ * physical/postgres: Remove use of prepared statements as this causes
+   connection multiplexing software to break [GH-1548]
+
+## 0.6.0 (June 14th, 2016)
 
 SECURITY:
 
@@ -57,18 +100,25 @@ FEATURES:
    secret distribution easier and more secure, including secure introduction.
  * **Azure Physical Backend**: You can now use Azure blob object storage as
    your Vault physical data store [GH-1266]
+ * **Swift Physical Backend**: You can now use Swift blob object storage as
+   your Vault physical data store [GH-1425]
  * **Consul Backend Health Checks**: The Consul backend will automatically
    register a `vault` service and perform its own health checking. By default
    the active node can be found at `active.vault.service.consul` and all with
    standby nodes are `standby.vault.service.consul`. Sealed vaults are marked
    critical and are not listed by default in Consul's service discovery.  See
    the documentation for details. [GH-1349]
- * **Explicit Maximum Token TTLs using Token Roles**: If using token roles, you
-   can now set explicit maximum TTLs on tokens that do not honor changes in the
-   system- or mount-set values. This is useful, for instance, when the max TTL
-   of the system or the `auth/token` mount must be set high to accommodate
-   certain needs but you want more granular restrictions on tokens being issued
-   directly from the Token authentication backend at `auth/token`. [GH-1399]
+ * **Explicit Maximum Token TTLs**: You can now set explicit maximum TTLs on
+   tokens that do not honor changes in the system- or mount-set values. This is
+   useful, for instance, when the max TTL of the system or the `auth/token`
+   mount must be set high to accommodate certain needs but you want more
+   granular restrictions on tokens being issued directly from the Token
+   authentication backend at `auth/token`. [GH-1399]
+ * **Non-Renewable Tokens**: When creating tokens directly through the token
+   authentication backend, you can now specify in both token store roles and
+   the API whether or not a token should be renewable, defaulting to `true`.
+ * **RabbitMQ Secret Backend**: Vault can now generate credentials for
+   RabbitMQ. Vhosts and tags can be defined within roles. [GH-788]
 
 IMPROVEMENTS:
 
@@ -100,15 +150,20 @@ IMPROVEMENTS:
    favor of normal ACL mechanisms [GH-1312]
  * credential/token: Sanitize policies and add `default` policies in appropriate
    places [GH-1235]
+ * credential/token: Setting the renewable status of a token is now possible
+   via `vault token-create` and the API. The default is true, but tokens can be
+   specified as non-renewable. [GH-1499]
  * secret/aws: Use chain credentials to allow environment/EC2 instance/shared
    providers [GH-307]
  * secret/aws: Support for STS AssumeRole functionality [GH-1318]
- * secret/pki: Added `exclude_cn_from_sans` field to prevent adding the CN to
-   DNS or Email Subject Alternate Names [GH-1220]
  * secret/consul: Reading consul access configuration supported. The response
    will contain non-sensitive information only [GH-1445]
+ * secret/pki: Added `exclude_cn_from_sans` field to prevent adding the CN to
+   DNS or Email Subject Alternate Names [GH-1220]
+ * secret/pki: Added list support for certificates [GH-1466]
  * sys/capabilities: Enforce ACL checks for requests that query the capabilities
    of a token on a given path [GH-1221]
+ * sys/health: Status information can now be retrieved with `HEAD` [GH-1509]
 
 BUG FIXES:
 
@@ -128,6 +183,10 @@ BUG FIXES:
  * core: Don't accidentally crosswire SIGINT to the reload handler [GH-1372]
  * credential/github: Make organization comparison case-insensitive during
    login [GH-1359]
+ * credential/github: Fix panic when renewing a token created with some earlier
+   versions of Vault [GH-1510]
+ * credential/github: The token used to log in via `vault auth` can now be
+   specified in the `VAULT_AUTH_GITHUB_TOKEN` environment variable [GH-1511]
  * credential/ldap: Fix problem where certain error conditions when configuring
    or opening LDAP connections would cause a panic instead of return a useful
    error message [GH-1262]

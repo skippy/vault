@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseSecret(t *testing.T) {
@@ -20,9 +21,13 @@ func TestParseSecret(t *testing.T) {
 	],
 	"wrap_info": {
 		"token": "token",
-		"ttl": 60
+		"ttl": 60,
+		"creation_time": "2016-06-07T15:52:10-04:00",
+		"wrapped_accessor": "abcd1234"
 	}
 }`)
+
+	rawTime, _ := time.Parse(time.RFC3339, "2016-06-07T15:52:10-04:00")
 
 	secret, err := ParseSecret(strings.NewReader(raw))
 	if err != nil {
@@ -40,11 +45,13 @@ func TestParseSecret(t *testing.T) {
 			"a warning!",
 		},
 		WrapInfo: &SecretWrapInfo{
-			Token: "token",
-			TTL:   60,
+			Token:           "token",
+			TTL:             60,
+			CreationTime:    rawTime,
+			WrappedAccessor: "abcd1234",
 		},
 	}
 	if !reflect.DeepEqual(secret, expected) {
-		t.Fatalf("bad: %#v %#v", secret, expected)
+		t.Fatalf("bad:\ngot\n%#v\nexpected\n%#v\n", secret, expected)
 	}
 }
